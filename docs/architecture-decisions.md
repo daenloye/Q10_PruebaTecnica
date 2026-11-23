@@ -41,4 +41,4 @@ El filtro heurístico reduce casos obvios para la demo, pero no sustituye un con
 
 `GeminiAgentClient` construye `systemInstruction` con reglas, identidad/rol y contexto autorizado; el mensaje validado se entrega como contenido de usuario. `GEMINI_API_KEY` y `GEMINI_MODEL` se cargan desde `.env` o el entorno. El cargador local solo establece variables que no existían en el proceso. El SDK queda configurado sin reintentos automáticos para que los 429 de cuota regresen pronto y con un mensaje claro.
 
-El modelo inicial es `gemini-2.5-flash`, seleccionado para pruebas con el tier gratuito. Se puede cambiar mediante `GEMINI_MODEL` sin editar el código.
+El modelo inicial es `gemini-3.5-flash-lite`, seleccionado para pruebas con el tier gratuito. La clave de prueba no tuvo acceso a `gemini-2.5-flash`; la API recomendó migrar a modelos Flash actuales. `gemini-3.8-flash` respondió temporalmente 503 por alta demanda durante la verificación. Se puede cambiar mediante `GEMINI_MODEL` sin editar el código.

@@ -9,6 +9,7 @@ builder.Services.AddCors(options => options.AddPolicy("local-frontend", policy =
     policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod()));
 builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddTransient<KnowledgeContextService>();
+builder.Services.AddSingleton<IGeminiTextGenerator, GeminiSdkTextGenerator>();
 builder.Services.AddSingleton<IAgentClient, GeminiAgentClient>();
 builder.Services.AddHttpClient<MockAcademicApi>(client => client.BaseAddress = new Uri(mockBaseUrl));
 
@@ -85,3 +86,5 @@ static async Task<IResult> HandleChat(ChatRequest request, HttpRequest httpReque
         return Results.Json(new { error = exception.Code, message = exception.PublicMessage }, statusCode: exception.StatusCode);
     }
 }
+
+public partial class Program { }

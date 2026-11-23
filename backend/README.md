@@ -5,8 +5,8 @@ API ASP.NET Core sobre .NET 8. El backend autentica usuarios ficticios, crea una
 ## Requisitos y ejecución
 
 - .NET SDK 8 o superior.
-- Copia `.env.example` a `.env` en la raíz y define `GEMINI_API_KEY`; `GEMINI_MODEL` es opcional y por defecto usa `gemini-2.5-flash`.
-- El modelo predeterminado `gemini-2.5-flash` figura con uso gratuito en la tabla oficial de precios de Gemini API; los límites de cuota pueden producir respuestas HTTP 429.
+- Copia `.env.example` a `.env` en la raíz y define `GEMINI_API_KEY`; `GEMINI_MODEL` es opcional y por defecto usa `gemini-3.5-flash-lite`.
+- `gemini-3.5-flash-lite` tiene nivel gratuito según la [tabla oficial de precios](https://ai.google.dev/gemini-api/docs/pricing). Los límites de cuota pueden producir respuestas HTTP 429.
 - `.env` y sus variantes están ignorados por Git. El backend carga el archivo al iniciar, conserva variables ya definidas en el proceso y no registra la clave.
 - `Google.GenAI` es el SDK oficial usado por `GeminiAgentClient`. El payload envía reglas, documentación, contexto académico autorizado e identidad/rol en `systemInstruction`; la pregunta validada se envía como contenido del usuario.
 - Sin clave, el chat responde 503; errores de cuota 429, servicio/red 502 y timeout 504 se devuelven con un mensaje controlado.
@@ -16,6 +16,25 @@ API ASP.NET Core sobre .NET 8. El backend autentica usuarios ficticios, crea una
 - Salud: `GET http://localhost:5000/api/health`.
 - La primera versión ofrece usuarios ficticios en `GET /api/auth/users`. Iniciar sesión con `POST /api/auth/login` y `{ "userId": "EST-001" }` (o cualquiera de los IDs listados). Enviar el token resultante como `Authorization: Bearer <token>`.
 - Chat: `POST /api/chat/messages`, cuerpo `{ "message": "¿Cuál es la nota mínima para aprobar?" }`.
+
+## Compilación y pruebas
+
+Desde la raíz del repositorio:
+
+```powershell
+dotnet restore backend/TutorFlow.sln
+dotnet build backend/TutorFlow.sln --no-restore
+dotnet test backend/TutorFlow.sln --no-build
+```
+
+Las pruebas locales usan un adaptador falso y no llaman a Gemini ni consumen cuota. Cubren respuestas válidas, el filtrado anti-inyección, el alcance de datos por rol, el error controlado de cuota y la falta de `GEMINI_API_KEY`. La prueba de conexión real se omite por defecto. Para activarla después de configurar `.env` o el entorno, ejecuta:
+
+```powershell
+$env:RUN_GEMINI_INTEGRATION_TESTS = "true"
+dotnet test backend/TutorFlow.sln --filter FullyQualifiedName~GeminiIntegrationTests
+```
+
+La prueba opt-in envía una pregunta breve al modelo configurado y puede consumir cuota de Gemini.
 
 ## Rutas
 

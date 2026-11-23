@@ -59,3 +59,17 @@
 **Asistente:** Verificó el índice: `.env` estaba rastreado y tenía longitud 0. Lo retiró del índice conservando el archivo local; amplió `.gitignore` para ignorar `.env` y `.env.*`, con excepción de `.env.example`. Añadió la plantilla con placeholders, un cargador local que no reemplaza variables de proceso, y reemplazó el stub por `GeminiAgentClient` usando el SDK oficial `Google.GenAI` 1.28.0, `gemini-2.5-flash` por defecto, instrucciones de sistema con reglas/contexto/rol, y respuestas controladas para clave ausente, cuota, errores de servicio/red y timeout. Actualizó README y decisiones de arquitectura.
 
 **Resultado:** Commit creado con el formato solicitado: `Generado-por: Codex`, línea en blanco y `feat: connect Gemini API with secure environment config`. El archivo `.env` local se conserva vacío e ignorado; el índice ya no lo rastrea.
+
+## Pruebas y verificación de Gemini en .NET 10
+
+**Usuario:** Solicitó verificar la conexión con Gemini usando SDK .NET `10.0.404`, compilar la solución, añadir pruebas automatizadas locales y opt-in para llamada real, cubrir cuota/antiinyección/permisos/configuración y registrar cambios con el formato de commit vigente.
+
+**Asistente:** Confirmó .NET SDK `10.0.404`, revisó que `.env` esté ignorado y sin seguimiento en Git, incorporó solución `TutorFlow.sln`, proyecto de pruebas con servidor de integración y pruebas locales para respuesta, alcance por estudiante/coordinador, bloqueo de inyección, respuesta 429 y clave ausente. Añadió una prueba Gemini real opt-in controlada por `RUN_GEMINI_INTEGRATION_TESTS=true` y documentó compilación/ejecución. La clave no se lee ni se registra en la documentación.
+
+**Verificación:** `dotnet restore` terminó correctamente; `dotnet build` compiló API net8.0 y suite net10.0 con cero advertencias y errores. La suite estándar pasó: 8 pruebas correctas y 1 prueba real omitida por defecto. La llamada opt-in contra la API pasó con pregunta sencilla y respuesta válida.
+
+**Ajuste por disponibilidad del modelo:** La primera llamada real confirmó que esta clave no tiene acceso a `gemini-2.5-flash`. El modelo `gemini-3.8-flash` respondió temporalmente 503 por alta demanda. Se configuró `gemini-3.5-flash-lite`, recomendado como migración en la información oficial vigente y disponible en el nivel gratuito; la prueba real con este modelo respondió correctamente. El modelo sigue siendo configurable con `GEMINI_MODEL`.
+
+**Reglas del repositorio:** Se conserva el formato de commit `Generado-por: Codex`, línea en blanco y luego `<tipo>: <detalle>`. El usuario reafirmó además que el registro de conversación permanece en `/logs`.
+
+**Resultado de Git:** Cambios registrados en un commit con los dos bloques requeridos: `Generado-por: Codex`, línea en blanco y `feat: verify Gemini integration and add automated tests`. `.env` y `bin/`/`obj/` permanecen ignorados y fuera del commit.
