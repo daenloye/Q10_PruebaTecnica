@@ -73,3 +73,13 @@
 **Reglas del repositorio:** Se conserva el formato de commit `Generado-por: Codex`, línea en blanco y luego `<tipo>: <detalle>`. El usuario reafirmó además que el registro de conversación permanece en `/logs`.
 
 **Resultado de Git:** Cambios registrados en un commit con los dos bloques requeridos: `Generado-por: Codex`, línea en blanco y `feat: verify Gemini integration and add automated tests`. `.env` y `bin/`/`obj/` permanecen ignorados y fuera del commit.
+
+## Suite completa y validación E2E de preguntas
+
+**Usuario:** Solicitó ejecutar `dotnet build` y la suite completa, además de crear/ejecutar un runner que lea `initial_docs/preguntas_ejemplo.json` como datos pasivos, envíe cada caso por el pipeline real de backend/Gemini, compare respuesta/rol/fuentes y proteja accesos e inyecciones.
+
+**Cambios:** Se añadió `InitialQuestionsE2ETests`, que carga todos los casos JSON, usa las rutas reales de login/chat, alimenta el contexto con el fixture `initial_docs/mock-api/datos.json` y llama al cliente Gemini real bajo opt-in. La protección ahora detecta referencias a estudiantes no autorizados tanto por ID como por nombre. Se encontró que Gemini derivaba incorrectamente una definitiva desde los cortes crudos; `AcademicGradeCalculator` calcula definitivas y promedio ponderado conforme a `rules.md` y agrega esos resultados al contexto. El prompt pide presentar los hechos completos solicitados y usar esos cálculos como autoridad.
+
+**Verificación final:** SDK `10.0.404`; build limpio con cero advertencias/errores. La suite completa en vivo pasó: 12 pruebas correctas, 0 fallidas, incluyendo una consulta simple, las 10 preguntas del JSON, permisos por rol, prueba anti-inyección, cuota y clave ausente. En las 10 preguntas, nueve respuestas fueron `PASS` y el caso 10 quedó bloqueado correctamente con 403. La prueba normal sin opt-in reportó 10 correctas y omitió las dos llamadas reales a Gemini.
+
+**Reporte:** La tabla completa con roles, preguntas, HTTP y cita esperada quedó en `logs/e2e-validation.md`. `Sources` de la API expone los archivos generales `rules.md` y `api.md`; no distingue el artículo/sección exacto en el campo estructurado.

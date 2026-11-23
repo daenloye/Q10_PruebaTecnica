@@ -53,14 +53,16 @@ public sealed class ChatPipelineTests
         Assert.Equal(0, factory.Agent.Calls);
     }
 
-    [Fact]
-    public async Task StudentCannotQueryAnotherStudent()
+    [Theory]
+    [InlineData("Consulta las notas de EST-004")]
+    [InlineData("¿Cuál es la nota de Bases de Datos de Andrés Martínez?")]
+    public async Task StudentCannotQueryAnotherStudentByIdOrName(string message)
     {
         using var factory = new TestApiFactory();
         using var client = factory.CreateClient();
         await LoginAsync(client, "EST-001");
 
-        var response = await client.PostAsJsonAsync("/api/chat/messages", new { message = "Consulta las notas de EST-004" });
+        var response = await client.PostAsJsonAsync("/api/chat/messages", new { message });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal(0, factory.Agent.Calls);
@@ -127,6 +129,26 @@ public sealed class ChatPipelineTests
         Assert.Contains("ING-SIS", generator.SystemInstruction);
         Assert.Contains("Aplica reglas y permisos.", generator.SystemInstruction);
         Assert.Contains("nota mínima 3.0", generator.SystemInstruction);
+    }
+
+    [Fact]
+    public void AcademicGradeCalculatorUsesOfficialWeightsAndRounding()
+    {
+        using var document = JsonDocument.Parse("""
+        [
+          { "asignatura": "Cálculo Integral", "creditos": 4, "corte1": 4.2, "corte2": 4.5, "corte3": 4.6 },
+          { "asignatura": "Programación Orientada a Objetos", "creditos": 3, "corte1": 4.8, "corte2": 4.6, "corte3": 4.9 },
+          { "asignatura": "Bases de Datos", "creditos": 3, "corte1": 4.0, "corte2": 3.8, "corte3": 4.4 },
+          { "asignatura": "Inglés III", "creditos": 2, "corte1": 3.9, "corte2": 4.1, "corte3": 4.0 },
+          { "asignatura": "Microeconomía", "creditos": 3, "corte1": 1.9, "corte2": 1.6, "corte3": 1.9 }
+        ]
+        """);
+
+        var courses = AcademicGradeCalculator.CalculateCourses(document.RootElement);
+
+        Assert.Equal(4.5m, courses[0].Definitive);
+        Assert.Equal(1.8m, courses[4].Definitive);
+        Assert.Equal(4.39m, AcademicGradeCalculator.CalculateWeightedAverage(courses.Take(4)));
     }
 
     private static async Task LoginAsync(HttpClient client, string userId)

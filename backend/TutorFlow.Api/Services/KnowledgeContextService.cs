@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using TutorFlow.Api.Contracts;
@@ -46,7 +47,9 @@ public sealed class KnowledgeContextService(MockAcademicApi mockApi, IWebHostEnv
     {
         builder.AppendLine($"\n### Datos de {id}");
         AppendJson(builder, "Datos básicos", await mockApi.GetStudentAsync(id, cancellationToken));
-        AppendJson(builder, "Notas por corte", await mockApi.GetGradesAsync(id, cancellationToken));
+        var grades = await mockApi.GetGradesAsync(id, cancellationToken);
+        AppendJson(builder, "Notas por corte", grades);
+        AppendCalculatedGrades(builder, grades);
         AppendJson(builder, "Asistencia", await mockApi.GetAttendanceAsync(id, cancellationToken));
     }
 
@@ -54,6 +57,24 @@ public sealed class KnowledgeContextService(MockAcademicApi mockApi, IWebHostEnv
     {
         if (value is not null)
             builder.AppendLine($"{label}: {value.Value.GetRawText()}");
+    }
+
+    private static void AppendCalculatedGrades(StringBuilder builder, JsonElement? grades)
+    {
+        var calculated = AcademicGradeCalculator.CalculateCourses(grades);
+        if (calculated.Count == 0) return;
+
+        builder.AppendLine("Definitivas calculadas por TutorFlow con la ponderación de rules.md:");
+        foreach (var course in calculated)
+        {
+            var definitive = course.Definitive?.ToString("0.0", CultureInfo.InvariantCulture) ?? "pendiente (falta calificar un corte)";
+            builder.AppendLine($"- {course.CourseName} ({course.Credits} créditos): {definitive}.");
+        }
+
+        var average = AcademicGradeCalculator.CalculateWeightedAverage(calculated);
+        if (average is not null)
+            builder.AppendLine($"Promedio ponderado calculado por TutorFlow: {average.Value.ToString("0.00", CultureInfo.InvariantCulture)}.");
+        builder.AppendLine("Los efectos de inasistencia se verifican por separado con el registro de asistencia y rules.md; los datos no indican si cada inasistencia tiene excusa aprobada.");
     }
 
     private async Task<string> ReadAsync(string path)

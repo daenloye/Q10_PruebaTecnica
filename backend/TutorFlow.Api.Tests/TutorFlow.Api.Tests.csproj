@@ -23,4 +23,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Include="../../initial_docs/preguntas_ejemplo.json" Link="Fixtures/preguntas_ejemplo.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../initial_docs/mock-api/datos.json" Link="Fixtures/academic-api-data.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace TutorFlow.Api.Services;
@@ -13,4 +15,21 @@ public static partial class PromptGuard
     public static bool HasObviousInjection(string message) => InjectionPattern().IsMatch(message);
     public static IEnumerable<string> MentionedStudentIds(string message) =>
         StudentIdPattern().Matches(message).Select(match => match.Value.ToUpperInvariant()).Distinct();
+
+    public static bool MentionsStudentName(string message, string studentName)
+    {
+        static string Normalize(string value)
+        {
+            var decomposed = value.Normalize(NormalizationForm.FormD);
+            return string.Concat(decomposed.Where(character =>
+                    CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark))
+                .Normalize(NormalizationForm.FormC);
+        }
+
+        var normalizedMessage = Normalize(message);
+        var normalizedName = Normalize(studentName);
+        return Regex.IsMatch(normalizedMessage,
+            $"(?<![\\p{{L}}\\p{{N}}]){Regex.Escape(normalizedName)}(?![\\p{{L}}\\p{{N}}])",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
 }

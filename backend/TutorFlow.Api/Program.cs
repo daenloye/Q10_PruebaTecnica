@@ -69,7 +69,13 @@ static async Task<IResult> HandleChat(ChatRequest request, HttpRequest httpReque
         return Results.BadRequest(new { error = "invalid_message", message = "Escribe un mensaje de 1 a 2000 caracteres." });
     var context = await contextService.BuildAsync(user, cancellationToken);
     var deniedIds = PromptGuard.MentionedStudentIds(message)
-        .Where(id => !context.AllowedStudentIds.Contains(id)).ToArray();
+        .Where(id => !context.AllowedStudentIds.Contains(id))
+        .Concat(UserDirectory.All
+            .Where(candidate => candidate.Role == "Student" && !context.AllowedStudentIds.Contains(candidate.Id))
+            .Where(candidate => PromptGuard.MentionsStudentName(message, candidate.Name))
+            .Select(candidate => candidate.Id))
+        .Distinct(StringComparer.OrdinalIgnoreCase)
+        .ToArray();
     if (deniedIds.Length > 0)
         return Results.Problem(statusCode: StatusCodes.Status403Forbidden, title: "Acceso denegado",
             detail: "Tu rol no permite consultar la información de ese estudiante.");

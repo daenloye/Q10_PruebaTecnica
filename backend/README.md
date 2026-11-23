@@ -27,14 +27,17 @@ dotnet build backend/TutorFlow.sln --no-restore
 dotnet test backend/TutorFlow.sln --no-build
 ```
 
-Las pruebas locales usan un adaptador falso y no llaman a Gemini ni consumen cuota. Cubren respuestas válidas, el filtrado anti-inyección, el alcance de datos por rol, el error controlado de cuota y la falta de `GEMINI_API_KEY`. La prueba de conexión real se omite por defecto. Para activarla después de configurar `.env` o el entorno, ejecuta:
+Las pruebas locales usan un adaptador falso y no llaman a Gemini ni consumen cuota. Cubren respuestas válidas, el filtrado anti-inyección, el alcance de datos por rol, el error controlado de cuota y la falta de `GEMINI_API_KEY`. Las pruebas reales (pregunta simple y flujo E2E) se omiten por defecto. El runner E2E carga cada caso de `initial_docs/preguntas_ejemplo.json`, pasa login y chat por la API real, usa los datos de `initial_docs/mock-api/datos.json` para el contexto y envía las preguntas permitidas a Gemini.
+
+Para ejecutar las llamadas reales después de configurar `.env` o el entorno, ejecuta:
 
 ```powershell
 $env:RUN_GEMINI_INTEGRATION_TESTS = "true"
 dotnet test backend/TutorFlow.sln --filter FullyQualifiedName~GeminiIntegrationTests
+dotnet test backend/TutorFlow.sln --filter FullyQualifiedName~InitialQuestionsE2ETests --logger "console;verbosity=detailed"
 ```
 
-La prueba opt-in envía una pregunta breve al modelo configurado y puede consumir cuota de Gemini.
+La suite opt-in envía una pregunta simple y procesa los diez casos del JSON; el caso de acceso no autorizado debe detenerse antes de llamar a Gemini. Estas solicitudes pueden consumir cuota. Si el `.env` local todavía selecciona `gemini-2.5-flash` y la clave no tiene acceso a ese modelo, establece `GEMINI_MODEL=gemini-3.5-flash-lite` en el entorno para ejecutar las pruebas con el modelo predeterminado vigente.
 
 ## Rutas
 
