@@ -41,3 +41,13 @@
 **Usuario:** Solicitó verificar el historial real y que el mensaje de commit contenga exactamente `Generado-por: Codex`, una línea en blanco y el detalle `tipo: descripción`, sin cambiar el orden ni inventar datos del historial.
 
 **Asistente:** Verificó `git log -n 5 --stat` y `git status`. La rama `main` está dos commits por delante de `origin/main`, el árbol está limpio y el último commit aún no se ha publicado. Su encabezado ya sigue el orden solicitado, pero tiene un párrafo adicional; eliminará ese texto y conservará únicamente las dos líneas del formato.
+
+## Base funcional de TutorFlow
+
+**Usuario:** Solicitó separar backend .NET 8+ y frontend React/TypeScript, implementar login de usuario demo con token único, chat con Bearer token, pipeline de validación/inyección/contexto/agente, permisos por rol, documentar decisiones de simplicidad y crear un commit con el formato solicitado.
+
+**Asistente:** Creó la API en `backend/TutorFlow.Api/` con sesiones opacas en memoria, catálogo ficticio de estudiantes/coordinadores, permisos de contexto por rol, heurística de prompt injection, carga de `rules.md`/`api.md`, consulta a la mock API y un `IAgentClient` desacoplado con stub local. Creó la interfaz de chat en `frontend/`, documentación técnica en ambos directorios y decisiones en `docs/architecture-decisions.md`. Anonimizó las identidades de ejemplo de `api.md` antes de pasarlas al adaptador para evitar mezclar expedientes entre roles.
+
+**Alcance de ejecución:** El entorno no tiene instalado el SDK de .NET (la consulta de versión indicó que no hay SDKs), por lo que no se compiló el backend. La mock API académica debe ejecutarse en Node para que el contexto incluya notas y asistencia; la normativa sigue disponible si no responde.
+
+**Resultado de Git:** Cambios registrados en un commit cuyo mensaje sigue el formato indicado: `Generado-por: Codex feat: build role-aware TutorFlow prototype`.

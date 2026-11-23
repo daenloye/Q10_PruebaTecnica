@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Content Include="../../rules.md" Link="Knowledge/rules.md" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="../../api.md" Link="Knowledge/api.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>
