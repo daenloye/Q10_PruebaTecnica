@@ -12,9 +12,10 @@ TutorFlow es un prototipo de asistente académico para responder consultas con e
 
 ## Inicio local
 
-1. Inicia la API académica para habilitar datos personalizados: desde `initial_docs/mock-api/`, ejecuta `node server.js`.
-2. Inicia el backend .NET 8: `cd backend/TutorFlow.Api` y `dotnet run --urls http://localhost:5000`.
-3. Inicia el frontend: `cd frontend`, `npm install`, `npm run dev`.
-4. Abre `http://localhost:5173` y selecciona cualquiera de los usuarios ficticios. El chat envía el token de sesión al backend.
+1. Copia `.env.example` a `.env` en la raíz y define `GEMINI_API_KEY` (y opcionalmente `GEMINI_MODEL`). Nunca agregues `.env` a Git.
+2. Inicia la API académica para habilitar datos personalizados: desde `initial_docs/mock-api/`, ejecuta `node server.js`.
+3. Inicia el backend .NET 8: `cd backend/TutorFlow.Api` y `dotnet run --urls http://localhost:5000`.
+4. Inicia el frontend: `cd frontend`, `npm install`, `npm run dev`.
+5. Abre `http://localhost:5173` y selecciona cualquiera de los usuarios ficticios. El chat envía el token de sesión al backend.
 
-El backend y el frontend incluyen sus propios README con detalles. La integración cloud del agente está pendiente; el adaptador demo permite recorrer el pipeline localmente.
+El backend y el frontend incluyen sus propios README con detalles. El backend usa el SDK oficial de Google Gemini; consulta `docs/architecture-decisions.md` para el flujo de contexto y permisos.

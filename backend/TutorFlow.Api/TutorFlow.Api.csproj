@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Google.GenAI" Version="1.28.0" />
     <Content Include="../../rules.md" Link="Knowledge/rules.md" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="../../api.md" Link="Knowledge/api.md" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>

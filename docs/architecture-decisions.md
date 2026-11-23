@@ -2,7 +2,7 @@
 
 ## Alcance del prototipo
 
-La solución separa el cliente React/TypeScript (`frontend/`) de la API ASP.NET Core .NET 8 (`backend/`). El backend carga `rules.md` y `api.md` como conocimiento y consulta la mock API local para datos académicos. El envío a un agente cloud sigue pendiente y está aislado detrás de `IAgentClient`; el adaptador activo es una demostración local que recupera fragmentos por coincidencia de palabras.
+La solución separa el cliente React/TypeScript (`frontend/`) de la API ASP.NET Core .NET 8 (`backend/`). El backend carga `rules.md` y `api.md` como conocimiento, consulta la mock API local para datos académicos y usa el SDK oficial .NET `Google.GenAI` a través de `GeminiAgentClient`, detrás de `IAgentClient`.
 
 ## Sesión y autenticación
 
@@ -37,6 +37,8 @@ El filtro heurístico reduce casos obvios para la demo, pero no sustituye un con
 - Se omiten endurecimiento avanzado, proveedor de identidad, límites de tasa, almacenamiento de sesiones distribuido y controles antiabuso porque el objetivo es demostrar el flujo funcional y los permisos, no certificar ciberseguridad.
 - Estas decisiones son simplificaciones de una prueba técnica. Antes de un despliegue real se necesitaría un diseño de seguridad apropiado al entorno.
 
-## Integración pendiente
+## Integración Gemini
 
-`IAgentClient` es el punto de sustitución. El mock actual no llama a un servicio externo ni afirma producir respuestas generativas. Un adaptador cloud futuro debe recibir `AgentRequest` estructurado y conservar las reglas de permiso y tratamiento de contexto establecidas en este documento.
+`GeminiAgentClient` construye `systemInstruction` con reglas, identidad/rol y contexto autorizado; el mensaje validado se entrega como contenido de usuario. `GEMINI_API_KEY` y `GEMINI_MODEL` se cargan desde `.env` o el entorno. El cargador local solo establece variables que no existían en el proceso. El SDK queda configurado sin reintentos automáticos para que los 429 de cuota regresen pronto y con un mensaje claro.
+
+El modelo inicial es `gemini-2.5-flash`, seleccionado para pruebas con el tier gratuito. Se puede cambiar mediante `GEMINI_MODEL` sin editar el código.

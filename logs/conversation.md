@@ -51,3 +51,11 @@
 **Alcance de ejecución:** El entorno no tiene instalado el SDK de .NET (la consulta de versión indicó que no hay SDKs), por lo que no se compiló el backend. La mock API académica debe ejecutarse en Node para que el contexto incluya notas y asistencia; la normativa sigue disponible si no responde.
 
 **Resultado de Git:** Cambios registrados en un commit cuyo mensaje sigue el formato indicado: `Generado-por: Codex feat: build role-aware TutorFlow prototype`.
+
+## Integración de Google Gemini
+
+**Usuario:** Solicitó reemplazar el stub del agente por la API oficial Google Gemini en tier gratuito, cargar `GEMINI_API_KEY` y `GEMINI_MODEL` desde `.env`, ignorar todas las variantes `.env.*` salvo plantillas, documentar y crear un commit con formato de dos bloques.
+
+**Asistente:** Verificó el índice: `.env` estaba rastreado y tenía longitud 0. Lo retiró del índice conservando el archivo local; amplió `.gitignore` para ignorar `.env` y `.env.*`, con excepción de `.env.example`. Añadió la plantilla con placeholders, un cargador local que no reemplaza variables de proceso, y reemplazó el stub por `GeminiAgentClient` usando el SDK oficial `Google.GenAI` 1.28.0, `gemini-2.5-flash` por defecto, instrucciones de sistema con reglas/contexto/rol, y respuestas controladas para clave ausente, cuota, errores de servicio/red y timeout. Actualizó README y decisiones de arquitectura.
+
+**Resultado:** Commit creado con el formato solicitado: `Generado-por: Codex`, línea en blanco y `feat: connect Gemini API with secure environment config`. El archivo `.env` local se conserva vacío e ignorado; el índice ya no lo rastrea.

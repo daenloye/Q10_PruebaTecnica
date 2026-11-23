@@ -5,6 +5,11 @@ API ASP.NET Core sobre .NET 8. El backend autentica usuarios ficticios, crea una
 ## Requisitos y ejecución
 
 - .NET SDK 8 o superior.
+- Copia `.env.example` a `.env` en la raíz y define `GEMINI_API_KEY`; `GEMINI_MODEL` es opcional y por defecto usa `gemini-2.5-flash`.
+- El modelo predeterminado `gemini-2.5-flash` figura con uso gratuito en la tabla oficial de precios de Gemini API; los límites de cuota pueden producir respuestas HTTP 429.
+- `.env` y sus variantes están ignorados por Git. El backend carga el archivo al iniciar, conserva variables ya definidas en el proceso y no registra la clave.
+- `Google.GenAI` es el SDK oficial usado por `GeminiAgentClient`. El payload envía reglas, documentación, contexto académico autorizado e identidad/rol en `systemInstruction`; la pregunta validada se envía como contenido del usuario.
+- Sin clave, el chat responde 503; errores de cuota 429, servicio/red 502 y timeout 504 se devuelven con un mensaje controlado.
 - El selector de usuario no pide contraseña: identifica perfiles ficticios para recorrer los permisos en la demo y no constituye autenticación real.
 - API mock requerida para incluir datos personalizados: Node.js 18+, desde `initial_docs/mock-api/`, `node server.js` (puerto 4000). El chat conserva las consultas normativas si el mock no está disponible.
 - Desde `backend/TutorFlow.Api/`: `dotnet run --urls http://localhost:5000`.
@@ -16,7 +21,7 @@ API ASP.NET Core sobre .NET 8. El backend autentica usuarios ficticios, crea una
 
 | Método y ruta | Auth | Uso |
 |---|---|---|
-| `GET /api/health` | No | Estado y proveedor demo. |
+| `GET /api/health` | No | Estado y proveedor Gemini. |
 | `GET /api/auth/users` | No | Usuarios ficticios disponibles para pruebas. |
 | `POST /api/auth/login` | No | Crea una sesión para el ID seleccionado. |
 | `POST /api/auth/logout` | Bearer | Invalida la sesión actual. |
@@ -30,5 +35,5 @@ El estudiante solo recibe contexto de su propio expediente; cada coordinador rec
 - **Sin refresh tokens ni doble token:** mantiene pequeño el flujo de login y chat centrado en demostrar roles y permisos.
 - **Sin endurecimiento avanzado de seguridad/CSRF/CORS:** el cliente envía el bearer token en un encabezado, no en una cookie; solo se habilita el origen local de Vite. Es un prototipo local, no una configuración para producción.
 - **Filtro anti-inyección heurístico:** bloquea frases obvias, como intento de ignorar instrucciones o revelar el prompt. Es una barrera de demostración, no un detector exhaustivo.
-- **Agente cloud desacoplado:** `IAgentClient` define el límite. `DemoAgentClient` devuelve fragmentos de contexto con coincidencia de palabras y declara que la integración cloud está pendiente. Sustituirlo por un adaptador del proveedor no cambia el pipeline.
+- **Agente cloud desacoplado:** `IAgentClient` define el límite y `GeminiAgentClient` llama al SDK oficial. Una sustitución futura del proveedor no cambia el pipeline.
 - **API de notas separada:** el backend consulta la mock API si está disponible. Los datos del estudiante no se incluyen cuando la mock API no responde; el conocimiento normativo continúa disponible.

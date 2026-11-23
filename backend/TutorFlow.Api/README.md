@@ -5,5 +5,8 @@ Proyecto ASP.NET Core minimal API (`net8.0`). Ver [README del backend](../README
 ## Configuración
 
 - `MockApi:BaseUrl` en `appsettings.json` o variable `MockApi__BaseUrl`; valor local: `http://localhost:4000/`.
-- El registro DI usa `DemoAgentClient`; la integración cloud queda pendiente detrás de `IAgentClient`.
+- `GEMINI_API_KEY` y `GEMINI_MODEL` se cargan desde el entorno; el modelo predeterminado es `gemini-2.5-flash`.
+- Desde la raíz, copia `.env.example` a `.env`, coloca allí la clave de Gemini API y reinicia el backend. El cargador busca el `.env` del repositorio; `.env` y `.env.*` están ignorados por Git, salvo las plantillas `.env.example`.
+- Se usa el SDK oficial `Google.GenAI` mediante `GeminiAgentClient`, registrado detrás de `IAgentClient`. Las instrucciones de sistema llevan reglas, contexto autorizado e identidad/rol; el prompt validado se envía como contenido de usuario.
+- Errores controlados: 503 si falta la clave, 429 por cuota excedida, 502 por error de servicio/red y 504 por timeout.
 - `rules.md` y `api.md` se copian al directorio `Knowledge` de salida al compilar.
