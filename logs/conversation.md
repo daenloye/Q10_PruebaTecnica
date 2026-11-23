@@ -83,3 +83,11 @@
 **Verificación final:** SDK `10.0.404`; build limpio con cero advertencias/errores. La suite completa en vivo pasó: 12 pruebas correctas, 0 fallidas, incluyendo una consulta simple, las 10 preguntas del JSON, permisos por rol, prueba anti-inyección, cuota y clave ausente. En las 10 preguntas, nueve respuestas fueron `PASS` y el caso 10 quedó bloqueado correctamente con 403. La prueba normal sin opt-in reportó 10 correctas y omitió las dos llamadas reales a Gemini.
 
 **Reporte:** La tabla completa con roles, preguntas, HTTP y cita esperada quedó en `logs/e2e-validation.md`. `Sources` de la API expone los archivos generales `rules.md` y `api.md`; no distingue el artículo/sección exacto en el campo estructurado.
+
+## Ejecución de E2E con la mock API HTTP en vivo
+
+**Usuario:** Solicitó iniciar la API adjunta, cambiar las pruebas para consultar sus endpoints HTTP en ejecución (sin leer `datos.json` directamente desde el runner), soportar conjuntos variables y ejecutar build/pruebas incluyendo Gemini y permisos.
+
+**Cambios:** El runner inicia `initial_docs/mock-api/server.js` en un puerto libre, espera `/salud`, verifica los endpoints de programa y estudiante y detiene el proceso al terminar. El backend ahora descubre programas/estudiantes por HTTP para construir usuarios dinámicos y alcances de coordinador; el contexto permitido se obtiene mediante endpoints de estudiantes, notas y asistencia. Se retiró la copia de `datos.json` del proyecto de pruebas. El test local `BackendBuildsStudentContextFromTheRunningMockApi` protege que el contexto recibido contenga notas/cálculos del estudiante autenticado y no otro expediente. Se corrigió la configuración del `HttpClient` tipado para tomar el puerto efímero del servidor y se especificó el rango de escala al responder sobre el umbral aprobatorio.
+
+**Verificación:** `dotnet build backend/TutorFlow.sln` limpio; suite normal: 11 aprobadas, 2 opt-in omitidas. Suite opt-in autorizada con Gemini: 13 aprobadas, 0 fallidas. En la E2E: casos 1–9 PASS (incluye abstención en el caso 9) y caso 10 BLOQUEADO CORRECTAMENTE (HTTP 403). Endpoints consultados: `/salud`, `/programas`, `/programas/{id}/estudiantes`, `/estudiantes/{id}`, `/estudiantes/{id}/notas`, `/estudiantes/{id}/asistencia` y `/coordinadores/{id}` para perfiles dinámicos. Logs detallados en `logs/e2e-validation.md`.

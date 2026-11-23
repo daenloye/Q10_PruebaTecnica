@@ -24,7 +24,8 @@ public sealed class GeminiAgentClient(IGeminiTextGenerator generator, IConfigura
                                 "en listados, incluye cada persona, asignatura y valor necesario, y en direcciones u horarios incluye toda la ubicación y franja horaria. " +
                                 "Si piden identificar asignaturas perdidas, relaciona cada estudiante con cada asignatura perdida y su nota definitiva. " +
                                 "Si preguntan por promedio ponderado, informa el promedio y las definitivas de las asignaturas incluidas en el cálculo. " +
-                                "Si preguntan por aprobación o notas, incluye la escala oficial cuando aporte contexto; si preguntan por el horario de una oficina, incluye también su ubicación registrada. " +
+                                "Si preguntan por aprobación, indica el umbral y el rango completo de la escala oficial (0.0 a 5.0); si preguntan por otras notas, incluye la escala cuando aporte contexto. " +
+                                "Si preguntan por el horario de una oficina, incluye también su ubicación registrada. " +
                                 "Cuando el contexto incluya definitivas o promedios calculados por TutorFlow, usa esos valores como autoritativos y no los recalcules desde las notas por corte. " +
                                 "Cita el artículo o sección indicada por las reglas cuando aplique; " +
                                 "para datos personales, aclara que provienen del contexto académico autorizado. Si el contexto no contiene la respuesta, " +

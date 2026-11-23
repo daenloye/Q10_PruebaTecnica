@@ -6,7 +6,7 @@ SDK: .NET `10.0.404`
 
 Modelo en la prueba en vivo: `gemini-3.5-flash-lite`
 
-## Resultado
+## Ejecución anterior (mock fixture)
 
 La prueba `InitialQuestionsE2ETests` cargó los 10 registros de `initial_docs/preguntas_ejemplo.json` como datos de prueba y los envió por el flujo real de login y chat. El backend usó el fixture pasivo `initial_docs/mock-api/datos.json` para construir el contexto y Gemini para responder los casos permitidos. El caso 10 se detuvo con HTTP 403 antes de despachar al agente.
 
@@ -38,3 +38,28 @@ La lista `Sources` de la API informa archivos de conocimiento (`rules.md`, `api.
 - `dotnet build backend/TutorFlow.sln --no-restore`: correcto, cero advertencias y errores.
 - `dotnet test backend/TutorFlow.sln` con `RUN_GEMINI_INTEGRATION_TESTS=true`: 12 correctas, 0 fallidas. Incluye la llamada simple real, la suite local y los 10 casos E2E.
 - Suite sin la variable opt-in: 10 correctas y las 2 pruebas que consumen cuota omitidas intencionalmente.
+
+## Validación posterior contra la API mock en ejecución
+
+El runner ahora inicia automáticamente `node initial_docs/mock-api/server.js` en un puerto disponible, comprueba `GET /salud`, `GET /programas`, `GET /programas/{id}/estudiantes` y, cuando hay estudiantes, `GET /estudiantes/{id}`, `/notas` y `/asistencia`. El backend usa esa URL HTTP real para el catálogo, los perfiles y el contexto académico. Los casos E2E siguen cargándose dinámicamente desde `preguntas_ejemplo.json`; el runner ya no copia ni lee `datos.json` como fuente directa. El proceso Node arrancado por la prueba se detiene al finalizar.
+
+**Compilación y pruebas locales:** `dotnet build backend/TutorFlow.sln` finalizó sin advertencias ni errores. `dotnet test backend/TutorFlow.sln --no-build` pasó 10 pruebas y omitió las 2 opt-in.
+
+**Diagnóstico y corrección:** se confirmó mediante un test local sin Gemini que la URL del servidor dinámico no se aplicaba al `HttpClient` tipado del backend; el test host conservaba la URL capturada al arrancar `Program`. Se configuró explícitamente `MockAcademicApi` con la URL asignada al proceso Node y se añadió una prueba de regresión que verifica que el contexto recibido por el agente incluya notas, cálculo de promedio y ningún expediente de otro estudiante. Además, se precisó la instrucción del agente para incluir el rango completo de calificación cuando se pregunta el umbral de aprobación.
+
+**Resultado final de la E2E en vivo:** pasó la ejecución única de los diez casos mediante login/chat del backend, usando datos HTTP del proceso Node y Gemini real. Nueve casos cumplieron sus expectativas; el caso 10 se bloqueó antes de Gemini con HTTP 403.
+
+| ID | Rol | Resultado | HTTP |
+|---:|---|---|---:|
+| 1 | Estudiante | PASS | 200 |
+| 2 | Estudiante | PASS | 200 |
+| 3 | Estudiante | PASS | 200 |
+| 4 | Estudiante | PASS | 200 |
+| 5 | Estudiante | PASS | 200 |
+| 6 | Coordinador | PASS | 200 |
+| 7 | Estudiante | PASS | 200 |
+| 8 | Estudiante | PASS | 200 |
+| 9 | Estudiante | PASS · abstención | 200 |
+| 10 | Estudiante | BLOQUEADO CORRECTAMENTE | 403 |
+
+Durante el diagnóstico, una primera suite conjunta desde el sandbox fue limitada por error TLS hacia Gemini; la ejecución simple con permisos de red autorizados pasó. Verificación final autorizada: `dotnet build backend/TutorFlow.sln` sin advertencias ni errores; `dotnet test backend/TutorFlow.sln --no-build` con 11 aprobadas y 2 opt-in omitidas; suite opt-in completa con `RUN_GEMINI_INTEGRATION_TESTS=true` y `GEMINI_MODEL=gemini-3.5-flash-lite`: 13 aprobadas, 0 fallidas y 0 omitidas. Incluye la prueba de contexto contra la mock API viva, la llamada simple a Gemini y los 10 casos E2E.

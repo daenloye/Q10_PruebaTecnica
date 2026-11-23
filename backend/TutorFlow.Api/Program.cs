@@ -1,3 +1,4 @@
+using System.Text.Json;
 using TutorFlow.Api.Contracts;
 using TutorFlow.Api.Services;
 
@@ -17,7 +18,7 @@ var app = builder.Build();
 app.UseCors("local-frontend");
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok", agentProvider = "gemini" }));
-app.MapGet("/api/auth/users", () => Results.Ok(UserDirectory.All));
+app.MapGet("/api/auth/users", ListUsers);
 
 app.MapPost("/api/auth/login", Login);
 app.MapPost("/api/auth/logout", Logout);
@@ -34,12 +35,76 @@ static bool TryReadBearer(HttpRequest request, out string? token)
     return token.Length > 0;
 }
 
-static IResult Login(LoginRequest request, SessionStore sessions)
+static async Task<IResult> ListUsers(MockAcademicApi academicApi, CancellationToken cancellationToken)
+{
+    var users = UserDirectory.All.ToDictionary(user => user.Id, StringComparer.OrdinalIgnoreCase);
+    var directory = await academicApi.GetDirectoryAsync(cancellationToken);
+    foreach (var student in directory.Students)
+    {
+        if (TryReadStudent(student, out var user)) users.TryAdd(user.Id, user);
+    }
+
+    foreach (var program in directory.Programs)
+    {
+        if (!program.TryGetProperty("coordinadorId", out var idValue) || string.IsNullOrWhiteSpace(idValue.GetString()))
+            continue;
+        var id = idValue.GetString()!;
+        if (users.ContainsKey(id)) continue;
+        var coordinator = await academicApi.GetCoordinatorAsync(id, cancellationToken);
+        if (coordinator is { ValueKind: JsonValueKind.Object } value && TryReadCoordinator(value, out var user))
+            users.TryAdd(user.Id, user);
+    }
+
+    return Results.Ok(users.Values);
+}
+
+static async Task<IResult> Login(LoginRequest request, SessionStore sessions, MockAcademicApi academicApi,
+    CancellationToken cancellationToken)
 {
     var user = UserDirectory.Find(request.UserId);
     if (user is null)
+    {
+        var student = await academicApi.GetStudentAsync(request.UserId, cancellationToken);
+        if (student is { ValueKind: JsonValueKind.Object } studentValue && TryReadStudent(studentValue, out var dynamicStudent))
+            user = dynamicStudent;
+        else
+        {
+            var coordinator = await academicApi.GetCoordinatorAsync(request.UserId, cancellationToken);
+            if (coordinator is { ValueKind: JsonValueKind.Object } coordinatorValue
+                && TryReadCoordinator(coordinatorValue, out var dynamicCoordinator))
+                user = dynamicCoordinator;
+        }
+    }
+
+    if (user is null)
         return Results.BadRequest(new { error = "unknown_user", message = "Selecciona un usuario de prueba válido." });
     return Results.Ok(new LoginResponse(sessions.Create(user), user));
+}
+
+static bool TryReadStudent(JsonElement value, out DemoUser user)
+{
+    user = default!;
+    if (!value.TryGetProperty("id", out var id) || string.IsNullOrWhiteSpace(id.GetString())
+        || !value.TryGetProperty("nombre", out var name) || string.IsNullOrWhiteSpace(name.GetString())
+        || !value.TryGetProperty("programaId", out var program) || string.IsNullOrWhiteSpace(program.GetString()))
+        return false;
+
+    user = new DemoUser(id.GetString()!, name.GetString()!, "Student", program.GetString(), []);
+    return true;
+}
+
+static bool TryReadCoordinator(JsonElement value, out DemoUser user)
+{
+    user = default!;
+    if (!value.TryGetProperty("id", out var id) || string.IsNullOrWhiteSpace(id.GetString())
+        || !value.TryGetProperty("nombre", out var name) || string.IsNullOrWhiteSpace(name.GetString())
+        || !value.TryGetProperty("programas", out var programs) || programs.ValueKind != JsonValueKind.Array)
+        return false;
+
+    var programIds = programs.EnumerateArray().Where(program => program.ValueKind == JsonValueKind.String)
+        .Select(program => program.GetString()!).ToArray();
+    user = new DemoUser(id.GetString()!, name.GetString()!, "Coordinator", null, programIds);
+    return true;
 }
 
 static IResult Logout(HttpRequest httpRequest, SessionStore sessions)
@@ -70,10 +135,10 @@ static async Task<IResult> HandleChat(ChatRequest request, HttpRequest httpReque
     var context = await contextService.BuildAsync(user, cancellationToken);
     var deniedIds = PromptGuard.MentionedStudentIds(message)
         .Where(id => !context.AllowedStudentIds.Contains(id))
-        .Concat(UserDirectory.All
-            .Where(candidate => candidate.Role == "Student" && !context.AllowedStudentIds.Contains(candidate.Id))
-            .Where(candidate => PromptGuard.MentionsStudentName(message, candidate.Name))
-            .Select(candidate => candidate.Id))
+        .Concat(context.KnownStudentNames
+            .Where(candidate => !context.AllowedStudentIds.Contains(candidate.Key))
+            .Where(candidate => PromptGuard.MentionsStudentName(message, candidate.Value))
+            .Select(candidate => candidate.Key))
         .Distinct(StringComparer.OrdinalIgnoreCase)
         .ToArray();
     if (deniedIds.Length > 0)

@@ -27,7 +27,7 @@ dotnet build backend/TutorFlow.sln --no-restore
 dotnet test backend/TutorFlow.sln --no-build
 ```
 
-Las pruebas locales usan un adaptador falso y no llaman a Gemini ni consumen cuota. Cubren respuestas válidas, el filtrado anti-inyección, el alcance de datos por rol, el error controlado de cuota y la falta de `GEMINI_API_KEY`. Las pruebas reales (pregunta simple y flujo E2E) se omiten por defecto. El runner E2E carga cada caso de `initial_docs/preguntas_ejemplo.json`, pasa login y chat por la API real, usa los datos de `initial_docs/mock-api/datos.json` para el contexto y envía las preguntas permitidas a Gemini.
+Las pruebas locales usan un adaptador falso y no llaman a Gemini ni consumen cuota. Cubren respuestas válidas, el filtrado anti-inyección, el alcance de datos por rol, el error controlado de cuota y la falta de `GEMINI_API_KEY`. Las pruebas reales (pregunta simple y flujo E2E) se omiten por defecto. El runner E2E carga dinámicamente cada caso de `initial_docs/preguntas_ejemplo.json`, inicia `initial_docs/mock-api/server.js` con Node.js en un puerto local disponible, comprueba `/salud` y consulta la API mock por HTTP. El backend obtiene el catálogo en vivo mediante `/programas` y `/programas/{id}/estudiantes`, y construye el contexto con `/estudiantes/{id}`, `/notas` y `/asistencia`; el coordinador se resuelve con `/coordinadores/{id}` cuando corresponde. El runner apaga el proceso iniciado al terminar. No lee `datos.json` directamente desde el proyecto de pruebas: ese archivo solo lo carga el servidor mock como fuente de su propia API.
 
 Para ejecutar las llamadas reales después de configurar `.env` o el entorno, ejecuta:
 

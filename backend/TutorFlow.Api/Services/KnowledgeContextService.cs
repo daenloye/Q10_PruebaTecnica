@@ -9,6 +9,7 @@ public sealed class KnowledgeContextService(MockAcademicApi mockApi, IWebHostEnv
 {
     public async Task<AcademicContext> BuildAsync(DemoUser user, CancellationToken cancellationToken)
     {
+        var directory = await mockApi.GetDirectoryAsync(cancellationToken);
         var rulesPath = Path.Combine(AppContext.BaseDirectory, "Knowledge", "rules.md");
         var apiPath = Path.Combine(AppContext.BaseDirectory, "Knowledge", "api.md");
         var apiKnowledge = await ReadAsync(apiPath);
@@ -23,9 +24,26 @@ public sealed class KnowledgeContextService(MockAcademicApi mockApi, IWebHostEnv
         builder.AppendLine("## Reglamento académico y reglas de negocio\n").AppendLine(await ReadAsync(rulesPath));
         builder.AppendLine("\n## Especificación de API (identidades de los ejemplos anonimizadas)\n").AppendLine(apiKnowledge);
 
+        var knownStudentNames = UserDirectory.All
+            .Where(candidate => candidate.Role == "Student")
+            .ToDictionary(candidate => candidate.Id, candidate => candidate.Name, StringComparer.OrdinalIgnoreCase);
+        foreach (var student in directory.Students)
+        {
+            if (student.TryGetProperty("id", out var id) && student.TryGetProperty("nombre", out var name)
+                && !string.IsNullOrWhiteSpace(id.GetString()) && !string.IsNullOrWhiteSpace(name.GetString()))
+                knownStudentNames[id.GetString()!] = name.GetString()!;
+        }
+
         var allowedIds = user.Role == "Student"
             ? new HashSet<string>([user.Id], StringComparer.OrdinalIgnoreCase)
-            : new HashSet<string>(UserDirectory.StudentIdsForPrograms(user.ProgramIds), StringComparer.OrdinalIgnoreCase);
+            : directory.Available
+                ? directory.Students
+                    .Where(student => student.TryGetProperty("programaId", out var programId)
+                        && user.ProgramIds.Contains(programId.GetString() ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+                    .Where(student => student.TryGetProperty("id", out var id) && !string.IsNullOrWhiteSpace(id.GetString()))
+                    .Select(student => student.GetProperty("id").GetString()!)
+                    .ToHashSet(StringComparer.OrdinalIgnoreCase)
+                : new HashSet<string>(UserDirectory.StudentIdsForPrograms(user.ProgramIds), StringComparer.OrdinalIgnoreCase);
 
         builder.AppendLine("\n## Contexto académico permitido para esta sesión\n");
         if (user.Role == "Student")
@@ -40,7 +58,7 @@ public sealed class KnowledgeContextService(MockAcademicApi mockApi, IWebHostEnv
                 await AppendStudentAsync(builder, studentId, cancellationToken);
         }
 
-        return new AcademicContext(builder.ToString(), allowedIds);
+        return new AcademicContext(builder.ToString(), allowedIds, knownStudentNames);
     }
 
     private async Task AppendStudentAsync(StringBuilder builder, string id, CancellationToken cancellationToken)

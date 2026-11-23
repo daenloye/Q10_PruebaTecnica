@@ -1,14 +1,17 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Diagnostics;
+using System.Net.Sockets;
+using System.Text;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Logging;
 using TutorFlow.Api.Contracts;
 using TutorFlow.Api.Services;
@@ -18,6 +21,28 @@ namespace TutorFlow.Api.Tests;
 
 public sealed class InitialQuestionsE2ETests
 {
+    [Fact]
+    public async Task BackendBuildsStudentContextFromTheRunningMockApi()
+    {
+        await using var mockApi = await RunningMockAcademicApi.StartAsync();
+        await VerifyMockApiRoutesAsync(mockApi.Client);
+        var agent = new RecordingAgentClient(null);
+        using var factory = new GeminiE2EApiFactory(mockApi.BaseAddress, agent);
+        using var client = factory.CreateClient();
+        var login = await client.PostAsJsonAsync("/api/auth/login", new { userId = "EST-001" });
+        login.EnsureSuccessStatusCode();
+        var session = await login.Content.ReadFromJsonAsync<LoginResponse>();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session!.Token);
+        using var response = await client.PostAsJsonAsync("/api/chat/messages", new { message = "Resume mis notas." });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.NotNull(agent.LastRequest);
+        Assert.Contains("Cálculo Integral", agent.LastRequest.Context, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("corte1", agent.LastRequest.Context, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Promedio ponderado calculado por TutorFlow", agent.LastRequest.Context, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("EST-002", agent.LastRequest.Context, StringComparison.OrdinalIgnoreCase);
+    }
+
     [GeminiIntegrationFact]
     public async Task EveryExampleQuestionUsesTheRealBackendAndGemini()
     {
@@ -39,7 +64,9 @@ public sealed class InitialQuestionsE2ETests
         }
 
         Assert.NotEmpty(examples);
-        using var factory = new GeminiE2EApiFactory();
+        await using var mockApi = await RunningMockAcademicApi.StartAsync();
+        await VerifyMockApiRoutesAsync(mockApi.Client);
+        using var factory = new GeminiE2EApiFactory(mockApi.BaseAddress);
         using var client = factory.CreateClient();
         client.Timeout = Timeout.InfiniteTimeSpan;
         var report = new List<string>();
@@ -103,6 +130,31 @@ public sealed class InitialQuestionsE2ETests
         Assert.Equal(examples.Length, report.Count);
     }
 
+    private static async Task VerifyMockApiRoutesAsync(HttpClient client)
+    {
+        using var health = await client.GetAsync("salud");
+        Assert.Equal(HttpStatusCode.OK, health.StatusCode);
+        using var programsResponse = await client.GetAsync("programas");
+        Assert.Equal(HttpStatusCode.OK, programsResponse.StatusCode);
+        var programs = await programsResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Array, programs.ValueKind);
+        if (programs.GetArrayLength() == 0) return;
+
+        var programId = programs[0].GetProperty("id").GetString();
+        using var studentsResponse = await client.GetAsync($"programas/{Uri.EscapeDataString(programId!)}/estudiantes");
+        Assert.Equal(HttpStatusCode.OK, studentsResponse.StatusCode);
+        var students = await studentsResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(JsonValueKind.Array, students.ValueKind);
+        if (students.GetArrayLength() == 0) return;
+
+        var studentId = students[0].GetProperty("id").GetString();
+        foreach (var suffix in new[] { "", "/notas", "/asistencia" })
+        {
+            using var response = await client.GetAsync($"estudiantes/{Uri.EscapeDataString(studentId!)}{suffix}");
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        }
+    }
+
     private static async Task<HttpResponseMessage> PostChatWithTransientRetriesAsync(HttpClient client, string message)
     {
         for (var attempt = 0; ; attempt++)
@@ -132,77 +184,111 @@ public sealed class InitialQuestionsE2ETests
 
 public sealed class GeminiE2EApiFactory : WebApplicationFactory<Program>
 {
+    private readonly string _mockApiBaseUrl;
+    private readonly IAgentClient? _agent;
+    public GeminiE2EApiFactory(string mockApiBaseUrl, IAgentClient? agent = null)
+    {
+        _mockApiBaseUrl = mockApiBaseUrl;
+        _agent = agent;
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(
-            new Dictionary<string, string?> { ["MockApi:BaseUrl"] = "http://academic-fixture.test/" }));
+            new Dictionary<string, string?> { ["MockApi:BaseUrl"] = _mockApiBaseUrl }));
         builder.ConfigureTestServices(services =>
         {
-            services.AddTransient<FixtureMockApiHandler>();
-            services.AddHttpClient<MockAcademicApi>().ConfigurePrimaryHttpMessageHandler<FixtureMockApiHandler>();
+            services.AddHttpClient<MockAcademicApi>(client => client.BaseAddress = new Uri(_mockApiBaseUrl));
             services.AddLogging(logging => logging.ClearProviders());
+            if (_agent is not null)
+            {
+                services.RemoveAll<IAgentClient>();
+                services.AddSingleton(_agent);
+            }
         });
     }
 }
 
-/// <summary>Serves the passive initial_docs mock fixture through the same HTTP client used by the API.</summary>
-public sealed class FixtureMockApiHandler : HttpMessageHandler
+internal sealed class RunningMockAcademicApi : IAsyncDisposable
 {
-    private readonly JsonDocument _fixture;
+    private readonly Process _process;
+    public HttpClient Client { get; }
+    public string BaseAddress { get; }
 
-    public FixtureMockApiHandler()
+    private RunningMockAcademicApi(Process process, HttpClient client, string baseAddress)
     {
-        var path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "academic-api-data.json");
-        _fixture = JsonDocument.Parse(File.ReadAllText(path));
+        _process = process;
+        Client = client;
+        BaseAddress = baseAddress;
     }
 
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    public static async Task<RunningMockAcademicApi> StartAsync()
     {
-        if (request.Method != HttpMethod.Get)
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.MethodNotAllowed));
-
-        var segments = request.RequestUri!.AbsolutePath.Trim('/').Split('/');
-        if (segments.Length is < 2 or > 3 || !string.Equals(segments[0], "estudiantes", StringComparison.Ordinal))
-            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
-
-        var studentId = Uri.UnescapeDataString(segments[1]);
-        var data = _fixture.RootElement;
-        JsonElement payload;
-        if (segments.Length == 2)
+        var apiDirectory = FindRepositoryRoot();
+        var listener = new TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        listener.Stop();
+        var baseAddress = $"http://127.0.0.1:{port}/";
+        var start = new ProcessStartInfo("node")
         {
-            var student = data.GetProperty("estudiantes").EnumerateArray()
-                .FirstOrDefault(item => item.GetProperty("id").GetString() == studentId);
-            if (student.ValueKind == JsonValueKind.Undefined)
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
-            payload = student;
-        }
-        else
+            WorkingDirectory = apiDirectory,
+            UseShellExecute = false,
+            CreateNoWindow = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        start.ArgumentList.Add(Path.Combine(apiDirectory, "server.js"));
+        start.Environment["PORT"] = port.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var process = Process.Start(start) ?? throw new InvalidOperationException("No fue posible iniciar Node.js para la mock API.");
+        process.OutputDataReceived += (_, _) => { };
+        process.ErrorDataReceived += (_, _) => { };
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        var client = new HttpClient { BaseAddress = new Uri(baseAddress), Timeout = TimeSpan.FromSeconds(2) };
+        try
         {
-            var collectionName = segments[2] switch
+            var deadline = DateTime.UtcNow.AddSeconds(15);
+            while (DateTime.UtcNow < deadline)
             {
-                "notas" => "notas",
-                "asistencia" => "asistencia",
-                _ => string.Empty
-            };
-            if (collectionName.Length == 0)
-                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
-            var values = data.GetProperty(collectionName).EnumerateArray()
-                .Where(item => item.GetProperty("estudianteId").GetString() == studentId)
-                .Select(item => item.Clone())
-                .ToArray();
-            payload = JsonSerializer.SerializeToElement(values);
+                if (process.HasExited) throw new InvalidOperationException($"La mock API terminó al iniciar (código {process.ExitCode}).");
+                try
+                {
+                    using var response = await client.GetAsync("salud");
+                    if (response.IsSuccessStatusCode) return new RunningMockAcademicApi(process, client, baseAddress);
+                }
+                catch (HttpRequestException) { }
+                catch (TaskCanceledException) { }
+                await Task.Delay(200);
+            }
+            throw new TimeoutException("La mock API no respondió en /salud dentro de 15 segundos.");
         }
-
-        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+        catch
         {
-            Content = new StringContent(payload.GetRawText(), Encoding.UTF8, "application/json")
-        });
+            client.Dispose();
+            if (!process.HasExited) process.Kill(entireProcessTree: true);
+            process.Dispose();
+            throw;
+        }
     }
 
-    protected override void Dispose(bool disposing)
+    private static string FindRepositoryRoot()
     {
-        if (disposing) _fixture.Dispose();
-        base.Dispose(disposing);
+        for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+            if (File.Exists(Path.Combine(directory.FullName, "initial_docs", "mock-api", "server.js")))
+                return Path.Combine(directory.FullName, "initial_docs", "mock-api");
+        throw new DirectoryNotFoundException("No se encontró initial_docs/mock-api/server.js desde el directorio de pruebas.");
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Client.Dispose();
+        if (!_process.HasExited)
+        {
+            _process.Kill(entireProcessTree: true);
+            await _process.WaitForExitAsync();
+        }
+        _process.Dispose();
     }
 }
 
