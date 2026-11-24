@@ -1,37 +1,63 @@
-# Decisiones de arquitectura — TutorFlow
+# Arquitectura y decisiones — TutorFlow
 
-## Alcance
+## Objetivo y alcance
 
-TutorFlow separa la interfaz Angular/TypeScript (`frontend/`) de la API ASP.NET Core .NET 8 (`backend/`). `BackendApiService` concentra las llamadas REST y el componente solo gestiona el selector/chat. La URL REST se carga desde configuración runtime (`BACKEND_API_URL` en Docker o `frontend/public/config.json` en desarrollo local). El backend carga `rules.md` y `api.md`, consulta la mock API para datos académicos y envía el contexto autorizado a Gemini mediante `IAgentClient`.
+TutorFlow es un prototipo funcional de asistente académico. Su arquitectura separa la interfaz Angular/TypeScript, la API ASP.NET Core sobre .NET 8 y la API académica mock de Node. Docker Compose ejecuta los tres servicios. El backend consulta los datos académicos por HTTP, incorpora `rules.md` y `api.md`, y llama a Gemini mediante `IAgentClient`.
 
-## Identidad de prueba y API directa
+El alcance es validar integración y reglas con datos ficticios. No se presenta como sistema listo para operar con expedientes reales.
 
-- La interfaz presenta en una sola vista el selector **Preguntar como** y el chat. Cada envío contiene el ID elegido y la pregunta.
-- `GET /api/users` publica los perfiles disponibles y sus roles para el selector y los consumidores REST.
-- `POST /api/chat/messages` recibe `{ "userId": "EST-001", "message": "¿Cuál es mi promedio?" }`. No requiere una petición de login previa, token de sesión ni cookie.
-- La identidad y rol se resuelven en el backend desde el directorio controlado de usuarios y los registros de la mock API. El cliente no puede fijar el rol ni los programas autorizados en el cuerpo.
-- Esta simplificación agiliza pruebas funcionales: se puede elegir un rol en un clic o probar el servicio desde curl, Postman y scripts sin abrir el frontend.
-- Los perfiles son ficticios y `userId` se transmite en texto plano. Cualquiera que pueda alcanzar esta API de demostración puede elegir otro perfil; esto **no autentica** a una persona ni protege información real.
+## Stack del backend: .NET
 
-## Pipeline de consulta y permisos
+Se conserva .NET 8 o superior, conforme al stack solicitado para la prueba. ASP.NET Core permite mantener validación, autorización por alcance, composición de contexto e integración Gemini en una API REST independiente de la interfaz. Docker usa SDK `10.0.404` para compilar y una imagen runtime compatible.
 
-1. Rechazar `userId` vacío, desconocido o asociado a un rol no admitido (`Student`/`Coordinator`).
-2. Rechazar preguntas vacías, mayores de 2000 caracteres o con patrones obvios de prompt injection.
-3. Resolver en servidor el perfil y los programas autorizados. Un estudiante solo obtiene su expediente; un coordinador solo obtiene estudiantes de sus programas. Las referencias fuera del alcance se rechazan con HTTP 403 antes de llamar a Gemini.
-4. Construir contexto de `rules.md`, `api.md` y datos académicos permitidos. Enviar a Gemini la pregunta, identidad/rol y la instrucción explícita de respetar reglas y alcance.
+## Interfaz: Angular en lugar de React
 
-La heurística anti-inyección bloquea ejemplos obvios y no garantiza detectar todas las técnicas. Las reglas de acceso importantes también se aplican en el backend antes del agente; no se confía en la respuesta del modelo como control de autorización.
+El frontend entregado está implementado en Angular y TypeScript. Angular aporta una organización modular y convenciones consistentes para separar componentes y servicios. `BackendApiService` concentra las llamadas HTTP, mientras la vista se ocupa del selector de perfil y del chat. Esta separación favorece mantenimiento y ampliación del cliente.
 
-## Qué cambiaría en producción
+Durante las iteraciones del prototipo en React, los problemas repetidos con el ciclo de vida de efectos y la confusión entre código servido y builds anteriores hicieron más difícil estabilizar la validación en navegador. Se migró a Angular para entregar una estructura más clara y un proceso reproducible. La configuración actual de Docker compila y sirve Angular; React fue retirado.
 
-No se aceptaría un `userId` arbitrario enviado por el cliente como prueba de identidad. Se integraría autenticación OAuth 2.0 / OpenID Connect (por ejemplo, Authorization Code con PKCE), tokens JWT firmados con expiración y refresh tokens administrados con rotación/revocación según el proveedor, y validación de firma, emisor, audiencia y expiración en servidor. El usuario y sus roles/permisos saldrían de claims criptográficos verificados; el cliente no podría seleccionar sus propios privilegios.
+## Flujo de una consulta
 
-También se configurarían rate limits por usuario e IP, CORS estricto por origen, HTTPS/TLS extremo a extremo, auditoría de accesos y decisiones, gestión centralizada de secretos, monitoreo y controles de abuso. La selección libre de perfiles, usuarios ficticios y los controles locales actuales son exclusivos de la prueba técnica, no una configuración lista para producción.
+1. El usuario elige un perfil ficticio y escribe una pregunta en la interfaz, o invoca directamente la API REST.
+2. El cliente envía `userId` y `message` a `POST /api/chat/messages`.
+3. El backend verifica el perfil, valida el contenido y bloquea patrones evidentes de prompt injection.
+4. El backend resuelve rol y programas desde sus fuentes controladas, consulta por HTTP la API académica mock y limita los datos antes de formar el contexto con `rules.md` y `api.md`.
+5. La instrucción del agente trata pregunta y documentos como datos, aplica las reglas, el contexto y el alcance autorizados, y solicita una respuesta breve en español.
+6. Gemini devuelve la respuesta al backend, que la entrega al cliente REST.
 
-## Integración Gemini
+La defensa anti-inyección por patrones es una capa heurística, no una garantía frente a todas las técnicas. La autorización por alcance se ejecuta en el backend antes de llamar al modelo; no depende de que Gemini aplique por sí mismo el control.
 
-`GeminiAgentClient` combina la instrucción de reglas, el contexto autorizado y el perfil ya resuelto en servidor. `GEMINI_API_KEY` y `GEMINI_MODEL` vienen del entorno o `.env`; el modelo se puede cambiar sin modificar el código. Las respuestas de cuota, configuración, red y servicio se traducen a errores controlados.
+## Identidad y permisos en la prueba
 
-### Estilo de respuesta
+- `GET /api/users` publica los perfiles disponibles con su rol y programa.
+- `POST /api/chat/messages` recibe `{ "userId": "EST-001", "message": "¿Cuál es mi promedio?" }`.
+- No hay login, token, cookie ni encabezado de autorización. Esto reduce pasos para probar roles desde la interfaz, Postman, `curl` y scripts.
+- El ID es ficticio y se transmite en texto plano. El backend busca su rol y alcance; no confía en un rol o lista de programas enviados por el cliente.
+- Un estudiante solo consulta sus propios datos. Un coordinador solo consulta estudiantes de sus programas asignados. Las solicitudes fuera de alcance se rechazan antes de invocar Gemini.
+- La selección libre de perfiles no prueba identidad. La API y los datos son solo de demostración y no deben usarse para información personal real.
 
-Gemini responde en español, con el dato o conclusión al inicio y normalmente en 1–3 frases o viñetas breves. Omite saludos, repeticiones y cierres; añade desgloses solo cuando se solicitan o aclaran el resultado. La configuración usa temperatura `0.1` y un máximo de `768` tokens de salida para favorecer respuestas objetivas sin cortar listados razonables. Esta preferencia no reduce la obligación de responder todos los puntos solicitados, usar valores calculados por TutorFlow, seguir `rules.md`/`api.md`, no inventar información ni exceder el contexto permitido por el rol. La validación de permisos se realiza en el backend antes de invocar a Gemini.
+## Seguridad: prototipo y producción
+
+En esta fase se priorizó demostrar funcionamiento e integración. Se omitieron login y controles avanzados propios de producción. Sí permanecen validación de datos, rechazo de patrones obvios de inyección y autorización de los registros consultados dentro del alcance de cada rol. Estos controles funcionales no sustituyen una autenticación robusta ni convierten la demo en un entorno seguro para datos reales.
+
+Una versión productiva debería incluir, según el diseño de identidad, OAuth 2.0/OpenID Connect, credenciales o JWT firmados y expirables, refresh tokens con políticas de rotación/revocación, autorización desde claims verificados en servidor, protección CSRF cuando se usen cookies o sesiones de navegador, HTTPS/TLS, CORS estricto, rate limiting por usuario/IP, auditoría y gestión centralizada de secretos. El cliente nunca debería elegir sus permisos mediante un ID arbitrario.
+
+## Datos, configuración y despliegue
+
+- El backend consulta la API mock por HTTP para catálogo, perfiles, notas y asistencia; no usa el JSON de ejemplo como fuente directa durante el flujo de consulta.
+- `MOCK_API_URL` define el destino de esa API desde el backend. Para comunicación entre contenedores se usa por defecto `http://mock-api:4000/`.
+- `BACKEND_API_URL` se publica a Angular en tiempo de ejecución. La dirección del backend visible desde el navegador es por defecto `http://localhost:5000`.
+- `GEMINI_API_KEY` y `GEMINI_MODEL` se cargan desde el entorno/`.env`. El `.env` real está ignorado por Git; `.env.example` documenta nombres y valores de muestra sin secreto.
+- Docker Compose construye y orquesta `mock-api`, `backend` y `frontend`, con dependencias de salud para reducir fallos de orden de arranque.
+
+## Integración y estilo de Gemini
+
+`GeminiAgentClient` ensambla reglas, perfil resuelto, permisos y contexto autorizado. La configuración actual usa temperatura `0.1` y hasta `768` tokens de salida. La respuesta solicitada debe poner primero el dato o conclusión, evitar introducciones y cierres y normalmente ocupar 1–3 frases o viñetas breves. Debe incluir todos los datos que la pregunta solicita, utilizar valores calculados por TutorFlow, citar secciones cuando aplique y declarar brevemente cuando la información no esté disponible. La concisión no modifica exactitud, permisos ni las instrucciones de seguridad.
+
+Los errores de configuración, cuota, red, disponibilidad del modelo y timeout se traducen a respuestas controladas; los logs técnicos no deben revelar la API key.
+
+## Pruebas y documentos relacionados
+
+Las pruebas unitarias de Angular cubren servicio HTTP y componente. Las pruebas .NET cubren pipeline, validaciones y permisos; las pruebas optativas Gemini pueden consumir cuota. El runner `docker-e2e` verifica los servicios y consulta los endpoints en ejecución, incluida una llamada real a Gemini.
+
+Consulta [README.md](../README.md) para arranque, variables y URLs; [contrato REST](backend-endpoints.md) para detalles de integración; y [presentación de entrega](entrega.md) para el resumen de cierre.

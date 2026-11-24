@@ -1,53 +1,55 @@
-# TutorFlow backend
+# Backend TutorFlow
 
-API REST ASP.NET Core .NET 8. Recibe la identidad de prueba seleccionada, resuelve su rol desde el directorio del servidor, aplica validaciones y permisos, carga `rules.md`/`api.md` y despacha el contexto autorizado a Gemini.
+API REST en ASP.NET Core sobre .NET 8. Resuelve el perfil de demostración, valida preguntas y permisos, obtiene información desde la API mock por HTTP y envía a Gemini el contexto permitido junto con `rules.md` y `api.md`.
 
 ## Requisitos y configuración
 
-- .NET SDK 8 o superior (la configuración Docker usa SDK `10.0.404`).
-- Copia `.env.example` a `.env` en la raíz y configura `GEMINI_API_KEY`; `GEMINI_MODEL` es opcional (`gemini-3.5-flash-lite` por defecto). `.env` y variantes están ignorados por Git.
-- El SDK oficial `Google.GenAI` envía reglas, identidad/rol resuelto, contexto permitido y la pregunta validada. No se registra la clave.
-- Sin clave o con el proyecto/modelo inaccesible, el chat responde 503; cuota 429, red/servicio 502 y timeout 504 son respuestas controladas. HTTP 503 de alta demanda se reintenta hasta dos veces con backoff exponencial y se registra con estado, modelo y detalle del proveedor (sin exponer la API key).
-- La mock API Node es opcional para datos personalizados. Desde `initial_docs/mock-api/`, inicia `node server.js` (puerto 4000).
-- Inicia localmente con `dotnet run --urls http://localhost:5000` desde `backend/TutorFlow.Api/`.
+- .NET SDK 8 o superior; Docker compila el backend con SDK `10.0.404`.
+- Para ejecutar consultas Gemini, crea `.env` desde `.env.example` en la raíz y configura `GEMINI_API_KEY`. `GEMINI_MODEL` es opcional y por defecto usa `gemini-3.5-flash-lite`.
+- `.env` y sus variantes se ignoran por Git. No incluyas credenciales en código, logs o commits.
+- `MOCK_API_URL` configura la API académica desde la perspectiva del backend. En Compose su valor predeterminado es `http://mock-api:4000/`; en desarrollo local, `http://localhost:4000/`.
 
-## Diagnóstico de disponibilidad Gemini
+## Ejecutar en local
 
-En la validación Docker del 24 de noviembre de 2026, el contenedor tenía `GEMINI_API_KEY` presente y `GEMINI_MODEL=gemini-3.8-flash`. Gemini respondió HTTP 503 con el detalle `This model is currently experiencing high demand`; no fue un 429 de cuota ni un fallo de red/TLS. `gemini-3.8-flash` sigue siendo un nombre válido, pero estaba temporalmente saturado. Para esta ejecución se cambió el `.env` local a `gemini-3.5-flash-lite`, modelo estable que respondió HTTP 200 en la prueba real. La plantilla `.env.example` ya usa ese modelo como valor predeterminado.
+Primero inicia la API mock desde `initial_docs/mock-api/` con Node 18 o superior:
 
-El SDK estaba configurado con `Attempts=1`, que desactiva los reintentos. Ahora usa hasta tres intentos con backoff exponencial y jitter para errores transitorios. Los logs incluyen código HTTP, modelo y detalle del proveedor con patrones de API key redactados. Consulta la [lista oficial de modelos](https://ai.google.dev/gemini-api/docs/models) y la [guía oficial de reintentos](https://ai.google.dev/gemini-api/docs/troubleshooting) si cambias el modelo.
-
-## Contrato REST
-
-No hay endpoint de login, bearer token ni cookie de sesión. El `userId` identifica un perfil ficticio para evaluación; el rol y los permisos se obtienen en el servidor, nunca de campos enviados por el cliente.
-
-| Método y ruta | Uso |
-|---|---|
-| `GET /api/health` | Salud y proveedor. |
-| `GET /api/users` | Lista los perfiles disponibles con rol y ámbito de programas. |
-| `POST /api/chat/messages` | Recibe `{ "userId": "EST-001", "message": "¿Cuál es mi promedio?" }` y responde con `answer`, `sources`, `provider`. |
-
-Respuestas de error: 400 para usuario desconocido/entrada inválida/anti-inyección, 403 para acceso fuera del alcance del rol, 429 para cuota Gemini, 502 para red/servicio y 503 para clave faltante.
-
-Ejemplo:
-
-```bash
-curl http://localhost:5000/api/users
-curl -X POST http://localhost:5000/api/chat/messages -H 'Content-Type: application/json' -d '{"userId":"EST-001","message":"¿Cuál es la nota mínima para aprobar?"}'
+```powershell
+node server.js
 ```
 
-## Validaciones y pruebas
+En otra terminal, desde `backend/TutorFlow.Api/`:
 
-El pipeline valida perfil/rol, pregunta (1–2000 caracteres), patrones obvios de prompt injection y alcance de datos antes de despachar al agente. Estudiantes solo consultan su expediente; coordinadores solo consultan estudiantes de sus programas asignados. Estos permisos se aplican localmente y se envían de nuevo como reglas estrictas a Gemini.
+```powershell
+dotnet run --urls http://localhost:5000
+```
+
+La clave debe estar disponible en el entorno o en el `.env` de la raíz. Para iniciar el conjunto completo en contenedores, consulta [la guía raíz](../README.md#configuración-y-arranque-con-docker).
+
+## Contrato y permisos
+
+Los endpoints disponibles son `GET /api/health`, `GET /api/users` y `POST /api/chat/messages`. No existe login ni token para esta prueba; `userId` selecciona un perfil ficticio. El rol y el ámbito se resuelven en el servidor. Los estudiantes solo acceden a su expediente; los coordinadores, a sus programas. Los detalles de cuerpos, respuestas y errores están en [docs/backend-endpoints.md](../docs/backend-endpoints.md).
+
+El pipeline valida pregunta/perfil, bloquea patrones obvios de prompt injection y aplica el alcance antes de invocar Gemini. La detección por patrones es heurística; esta API no está diseñada para datos reales ni exposición pública.
+
+## Gemini y errores
+
+El SDK `Google.GenAI` se integra detrás de `IAgentClient`. El backend controla los errores comunes: cuota (429), servicio o red (502), configuración/modelo/no disponibilidad (503) y timeout (504). Los fallos transitorios tienen hasta tres intentos en total. Los logs dan detalles técnicos sanitizados y no imprimen la clave.
+
+## Build y pruebas
+
+Desde la raíz:
 
 ```powershell
 dotnet restore backend/TutorFlow.sln
 dotnet build backend/TutorFlow.sln --no-restore
 dotnet test backend/TutorFlow.sln
+docker compose --profile test run --build --rm docker-e2e
 ```
 
-Las pruebas locales usan un adaptador falso y cubren permisos, entrada directa sin sesión, identidad inválida, anti-inyección, cuota y configuración faltante. Las pruebas opt-in con Gemini requieren `RUN_GEMINI_INTEGRATION_TESTS=true` y pueden consumir cuota. El E2E consulta cada caso del JSON de ejemplo mediante el nuevo contrato directo y una mock API Node iniciada temporalmente.
+Las pruebas .NET locales usan dependencias simuladas y no consumen cuota. Las pruebas optativas contra Gemini requieren `RUN_GEMINI_INTEGRATION_TESTS=true` y una clave válida; pueden consumir cuota. El runner Docker consulta servicios en ejecución, incluidos los endpoints de la API mock y el chat real.
 
-## Decisión de prueba técnica
+## Documentación relacionada
 
-Enviar el `userId` permite evaluar roles con facilidad desde la interfaz, Postman y scripts. No es autenticación: cualquier consumidor de la API puede escoger un perfil demo. En producción se exigirían OAuth2/OIDC, tokens JWT firmados y expirables con refresh, claims verificados en servidor, rate limits, CORS estricto, HTTPS/TLS, auditoría y gestión centralizada de secretos. Detalle en [arquitectura y decisiones](../docs/architecture-decisions.md).
+- [Arquitectura y decisiones](../docs/architecture-decisions.md)
+- [Contrato REST del backend](../docs/backend-endpoints.md)
+- [Presentación de entrega](../docs/entrega.md)

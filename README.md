@@ -1,78 +1,118 @@
 # TutorFlow
 
-Asistente académico de prueba técnica. La interfaz Angular/TypeScript y la API ASP.NET Core (.NET 8) permiten elegir un perfil ficticio y consultar reglamento y datos académicos con permisos de estudiante/coordinador aplicados en el backend. El servicio puede consumirse directamente por REST, sin usar la interfaz.
+## Presentación
 
-## Arquitectura y decisiones
+TutorFlow es un asistente académico desarrollado como prototipo funcional para la prueba técnica. Permite consultar el reglamento institucional y datos académicos de demostración con respuestas breves y contextualizadas. La solución integra una interfaz Angular, una API REST en ASP.NET Core y Gemini; el backend verifica el rol y el alcance de cada consulta antes de compartir información con el agente.
 
-- Mock API Node en `initial_docs/mock-api/` con programas, estudiantes, coordinadores, notas y asistencia.
-- Backend .NET 8, compilado con SDK `10.0.404`, con controles de entrada, anti-inyección, autorización por rol, documentación/contexto y adaptador Gemini.
-- Frontend Angular + TypeScript en una vista: selector **Preguntar como**, chat y respuestas. `BackendApiService` concentra la comunicación HTTP.
-- `GET /api/users` lista perfiles y roles. `POST /api/chat/messages` acepta el ID y el mensaje, sin login ni token de sesión.
-- Suites .NET unitarias y E2E Docker; pruebas opt-in que consultan Gemini.
+Los perfiles y registros incluidos son ficticios. La entrega demuestra el flujo y la integración entre componentes; no está destinada a proteger información académica real ni constituye una configuración productiva.
 
-Consulta [arquitectura y decisiones](docs/architecture-decisions.md) para la justificación de la identidad directa de prueba, límites de permisos y controles que se requieren en producción.
+## Resultado de la entrega
 
-Consulta también el [contrato de endpoints del backend .NET](docs/backend-endpoints.md) para integrar cualquier cliente REST.
+- Backend ASP.NET Core sobre .NET 8, construido en Docker con SDK `10.0.404`.
+- Interfaz Angular y TypeScript con selección de perfil y chat. `BackendApiService` centraliza las llamadas REST.
+- API académica mock consultada por HTTP; los datos no se leen desde un JSON estático en el flujo del backend.
+- Integración con Gemini configurada mediante variables de entorno.
+- Validación de entradas, filtro de patrones obvios de prompt injection y límites de acceso por estudiante/coordinador aplicados en el backend.
+- Pruebas unitarias de Angular y .NET, y un runner E2E Docker para los flujos integrados.
 
-### Simplificación de identidad para la prueba
+## Documentación
 
-Se elimina el login y el token para agilizar las pruebas funcionales: el selector permite cambiar de rol en un clic y cualquier consumidor REST puede llamar al backend sin pasar por la UI. La API recibe un ID ficticio y resuelve desde sus propios datos el nombre, rol y alcance; no confía en un rol enviado por el cliente. Este ID en texto plano no prueba quién es la persona y solo es apropiado para los datos demo.
+- [Arquitectura y decisiones](docs/architecture-decisions.md): stack, flujo, permisos y alcance de seguridad.
+- [Presentación formal de entrega](docs/entrega.md): resumen ejecutivo, operación y puntos de consulta.
+- [Contrato de endpoints del backend](docs/backend-endpoints.md): rutas, esquemas, respuestas, errores y ejemplos.
+- [Reglas académicas](rules.md): síntesis normativa utilizada como conocimiento del asistente.
+- [Contrato de la API académica](api.md): rutas y esquemas de la API mock.
+- [Guía del backend](backend/README.md) y [guía de Angular](frontend/README.md).
 
-En producción se autenticarían usuarios con OAuth2/OIDC y JWT firmados/expirables más refresh tokens, se autorizarían claims verificados en servidor y se agregarían rate limiting por usuario/IP, CORS estricto, HTTPS/TLS, auditoría y gestión centralizada de secretos.
+## Funcionamiento
 
-## Configuración y Docker
+1. La persona elige un perfil de demostración en **Preguntar como** y escribe su consulta.
+2. Angular envía `userId` y `message` a `POST /api/chat/messages`. También se puede invocar directamente desde cualquier cliente REST.
+3. El backend resuelve el nombre, rol y programas permitidos desde sus fuentes de datos. No acepta el rol como dato confiable del cliente.
+4. Valida el mensaje y bloquea patrones evidentes de inyección. Luego consulta por HTTP la API mock y compone el contexto con los documentos `rules.md`, `api.md` y los datos académicos autorizados.
+5. Gemini recibe ese contexto, el perfil autorizado y la pregunta. Responde en español, de forma concisa y basada en la información disponible.
 
-1. Copia `.env.example` a `.env` (`Copy-Item .env.example .env`) y configura `GEMINI_API_KEY`. `GEMINI_MODEL` es opcional. No subas `.env`.
-2. `MOCK_API_URL` configura la URL interna de Node (predeterminada `http://mock-api:4000/`); `MOCK_API_PORT`, `BACKEND_PORT` y `FRONTEND_PORT` controlan puertos publicados (4000, 5000 y 5173 por defecto). `BACKEND_API_URL` configura el backend que Angular usa en runtime (por defecto `http://localhost:5000`); en desarrollo local se puede editar `frontend/public/config.json`.
-3. Levanta y comprueba los servicios:
+Estudiantes consultan únicamente su expediente; coordinadores, únicamente estudiantes de los programas asignados. Los intentos fuera de alcance se rechazan antes de llamar al agente. El filtrado de inyección es una defensa complementaria y no garantiza identificar todos los ataques.
+
+## Decisiones finales
+
+- **Backend .NET:** se conserva ASP.NET Core sobre .NET 8 o superior, según el stack solicitado y para integrar de forma directa las reglas, la API adjunta y Gemini.
+- **Angular en lugar de React:** se adoptó una estructura modular con servicios dedicados, como `BackendApiService`, que separa la vista del acceso HTTP y facilita ampliar y mantener el cliente. Durante las iteraciones con React aparecieron problemas repetidos de ciclo de vida de efectos y de builds/servidor desactualizados que dificultaban validar la interfaz; la migración permitió estabilizar y simplificar esa estructura. La solución entregada usa Angular y no mantiene un servicio React.
+- **Identidad de demostración:** no hay login ni token de sesión. Enviar un identificador ficticio permite probar distintos roles desde la UI o desde REST sin pasos previos. El servidor resuelve los permisos del perfil y no acepta roles declarados por el cliente.
+- **Seguridad en esta fase:** se implementaron controles funcionales de validación, defensa básica ante inyección y autorización por alcance. Se omitieron autenticación real y controles avanzados de producción para facilitar la prueba integrada; esto no habilita el uso con datos reales.
+- **Producción:** se requerirían autenticación OAuth 2.0/OpenID Connect, tokens firmados con expiración y renovación mediante refresh token, autorización basada en claims verificados, protección CSRF cuando corresponda al mecanismo de sesión/navegador, HTTPS/TLS, CORS estricto, limitación de tasa, auditoría y gestión centralizada de secretos.
+- **Datos y configuración:** el backend consulta la API mock mediante HTTP. `MOCK_API_URL` permite cambiar su dirección sin modificar código; `GEMINI_API_KEY` y `GEMINI_MODEL` se configuran en `.env`, que Git ignora. Solo `.env.example`, sin credenciales reales, se versiona.
+- **Despliegue y respuestas:** Docker Compose orquesta la API mock, el backend y Angular con dependencias y comprobaciones de salud. Gemini recibe una preferencia de respuesta concisa (temperatura `0.1`, máximo `768` tokens); esta preferencia no permite omitir datos pedidos ni rebajar reglas o permisos.
+
+El detalle ampliado de estas decisiones está en [docs/architecture-decisions.md](docs/architecture-decisions.md).
+
+## Requisitos
+
+- Docker Desktop con Docker Compose.
+- Una clave de Gemini API para probar el chat real. Las llamadas pueden estar sujetas a cuota del proveedor.
+- Para desarrollo local: Node.js compatible con Angular 21 y .NET SDK 8 o superior. La configuración de contenedor de backend usa .NET SDK `10.0.404`.
+
+## Configuración y arranque con Docker
+
+Desde la raíz del repositorio, copia la plantilla y agrega la clave:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+Edita `.env` y configura `GEMINI_API_KEY`. `GEMINI_MODEL` puede mantenerse como `gemini-3.5-flash-lite`. No compartas ni agregues `.env` a Git.
+
+Variables principales:
+
+| Variable | Función | Valor predeterminado |
+|---|---|---|
+| `GEMINI_API_KEY` | Credencial de Gemini, obligatoria para el chat | Sin valor |
+| `GEMINI_MODEL` | Modelo de Gemini | `gemini-3.5-flash-lite` |
+| `MOCK_API_URL` | URL de la API mock vista desde el backend | `http://mock-api:4000/` |
+| `MOCK_API_PORT` | Puerto de la API mock publicado en el host | `4000` |
+| `BACKEND_PORT` | Puerto del backend publicado en el host | `5000` |
+| `FRONTEND_PORT` | Puerto de Angular publicado en el host | `5173` |
+| `BACKEND_API_URL` | URL del backend entregada al navegador | `http://localhost:5000` |
+
+Construye y levanta todo el sistema:
 
 ```powershell
 docker compose up -d --build
 docker compose ps
 ```
 
-`DOCKER_CA_CERT_PATH` apunta de forma opcional a un certificado raíz PEM para redes con inspección TLS; el valor predeterminado es `.local-certs/empty.pem`. `DOTNET_RUNTIME_IMAGE` y `NODE_BASE_IMAGE` permiten elegir imágenes base locales si el daemon no puede acceder a registries; sus valores normales están en `.env.example`.
+Para detenerlo: `docker compose down`. Para revisar la operación: `docker compose logs --tail 100 backend frontend mock-api`.
 
-URLs: [frontend/chat](http://localhost:5173), [salud backend](http://localhost:5000/api/health), [usuarios](http://localhost:5000/api/users), [salud mock API](http://localhost:4000/salud) y [programas](http://localhost:4000/programas).
+## Dónde consultar el sistema
 
-## Uso directo de la API
+- [Interfaz y chat](http://localhost:5173/)
+- [Salud del backend](http://localhost:5000/api/health)
+- [Perfiles y roles](http://localhost:5000/api/users)
+- [Salud de la API mock](http://localhost:4000/salud)
+- [Programas de la API mock](http://localhost:4000/programas)
 
-El perfil se envía en cada consulta. No se requiere token ni llamada de login. Ejemplo con PowerShell/curl:
+Los puertos publicados se pueden cambiar en `.env`. Si se cambia el puerto del backend, actualiza también `BACKEND_API_URL`; `MOCK_API_URL` es la dirección interna que usa el backend para alcanzar la API mock.
 
-```powershell
-curl.exe http://localhost:5000/api/users
-curl.exe -X POST http://localhost:5000/api/chat/messages `
-  -H "Content-Type: application/json" `
-  -d '{"userId":"EST-001","message":"¿Cuál es la nota mínima para aprobar?"}'
-```
+## Consulta directa del backend
 
-Para probar un coordinador, usa un ID listado por `GET /api/users`, por ejemplo `COORD-01`. La respuesta exitosa contiene `answer`, `sources` y `provider`. Usuarios desconocidos/entrada inválida se rechazan con 400; las consultas a expedientes fuera del alcance del rol se rechazan con 403. La pregunta se filtra contra inyecciones antes de llamar a Gemini.
-
-### Comandos de validación humana
-
-Con Docker activo y `.env` configurado, estos comandos se pueden ejecutar desde PowerShell en la raíz:
+No hay que iniciar sesión. Obtén los perfiles disponibles y envía un ID existente:
 
 ```powershell
-docker compose ps
-Invoke-RestMethod http://localhost:4000/salud | ConvertTo-Json
-Invoke-RestMethod http://localhost:5000/api/health | ConvertTo-Json
-Invoke-RestMethod http://localhost:5000/api/users | Select-Object id,name,role | Format-Table
-$body = @{ userId = "EST-001"; message = "¿Cuál es la nota mínima para aprobar?" } | ConvertTo-Json
+Invoke-RestMethod http://localhost:5000/api/users
+$body = @{ userId = "EST-001"; message = "¿Cuál es mi promedio ponderado?" } | ConvertTo-Json
 Invoke-RestMethod -Method Post -Uri http://localhost:5000/api/chat/messages -ContentType "application/json" -Body $body
-docker compose logs --tail 100 backend frontend mock-api
-dotnet test backend/TutorFlow.sln
-docker compose --profile test build docker-e2e
-docker compose --profile test run --rm docker-e2e
 ```
+
+La respuesta exitosa incluye `answer`, `sources` y `provider`. La guía [docs/backend-endpoints.md](docs/backend-endpoints.md) describe también las respuestas de error y los permisos.
 
 ## Pruebas
 
 ```powershell
-npm --prefix frontend install
+npm --prefix frontend ci
 npm --prefix frontend run build
 npm --prefix frontend test
 dotnet test backend/TutorFlow.sln
 docker compose --profile test run --build --rm docker-e2e
 ```
 
-Las pruebas Angular usan `HttpTestingController` para las peticiones HTTP y verifican selector/envío en el componente. Las pruebas .NET locales usan un adaptador falso y no consumen cuota. El runner Docker valida que el bundle Angular y la configuración runtime se sirven correctamente, además del listado REST, flujo directo por estudiante/coordinador, entrada inválida, anti-inyección, límites entre programas y respuestas reales Gemini. Para las pruebas opt-in .NET con Gemini configura `RUN_GEMINI_INTEGRATION_TESTS=true`; pueden consumir cuota. Para apagar el entorno: `docker compose down`.
+Las pruebas locales de Angular y .NET no consumen cuota Gemini. El runner E2E llama al backend integrado y hace una consulta real al proveedor; requiere `.env` con una clave válida y puede consumir cuota. Las pruebas optativas de integración .NET con Gemini se habilitan mediante `RUN_GEMINI_INTEGRATION_TESTS=true`.

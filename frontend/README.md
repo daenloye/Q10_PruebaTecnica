@@ -1,21 +1,40 @@
-# TutorFlow Angular
+# TutorFlow — Frontend Angular
 
-Frontend Angular 21 + TypeScript. `BackendApiService` contiene las llamadas HTTP al backend; el componente `App` solo coordina la vista del selector de usuarios y el chat.
+Interfaz Angular 21 y TypeScript. Presenta el selector **Preguntar como**, el chat y las respuestas. `BackendApiService` contiene la comunicación HTTP con el backend para que el componente principal se concentre en la interfaz. React no forma parte del frontend entregado.
 
-## Desarrollo
+## Requisitos y configuración
+
+- Node.js compatible con Angular 21 y npm.
+- La URL REST local se configura en `public/config.json` (`apiBaseUrl`). Al correr en Docker, el servidor publica `/config.json` con el valor de `BACKEND_API_URL`, editable en el `.env` de la raíz y aplicado al arrancar el contenedor.
+- La URL que Angular usa debe ser accesible desde el navegador. En la configuración local predeterminada es `http://localhost:5000`.
+
+## Desarrollo local
+
+Desde `frontend/`:
 
 ```powershell
-npm install
+npm ci
 npm start
 ```
 
-La aplicación se sirve en `http://localhost:5173`. La URL del backend local se configura en `public/config.json` (`apiBaseUrl`). En Docker, el servidor entrega `/config.json` a partir de `BACKEND_API_URL`, por lo que puede cambiarse en `.env` sin recompilar Angular.
+La aplicación queda en `http://localhost:5173`. Para completar el flujo, el backend debe estar activo en la URL configurada y la API mock debe ser accesible desde el backend.
 
-## Build y pruebas
+## Compilación y pruebas
 
 ```powershell
 npm run build
 npm test
 ```
 
-Las pruebas Vitest cubren la capa HTTP con `HttpTestingController` y la selección/envío de mensajes del componente. El flujo completo de sistema se valida con el runner `docker-e2e` desde la raíz.
+Las pruebas usan `HttpTestingController` para verificar las solicitudes del servicio y validan la selección del usuario y envío de mensajes desde el componente. El runner E2E del repositorio prueba el frontend Angular junto con backend y API mock en Docker.
+
+## Ejecución Docker
+
+Desde la raíz del repositorio configura `.env` según el [README principal](../README.md#configuración-y-arranque-con-docker) y ejecuta:
+
+```powershell
+docker compose up -d --build frontend
+docker compose ps
+```
+
+Consulta [arquitectura y decisiones](../docs/architecture-decisions.md), [contrato REST](../docs/backend-endpoints.md) y [presentación de entrega](../docs/entrega.md).
