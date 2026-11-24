@@ -24,6 +24,14 @@ Requisitos: Docker Desktop/Engine y Docker Compose v2; una clave de Google Gemin
    - Si cambias el puerto interno del servicio Node, sincroniza el puerto en `.env`, `MOCK_API_URL` y `docker-compose.yml`. Cambiar solo `MOCK_API_PORT` modifica el puerto publicado, no el interno.
 4. `BACKEND_PORT` y `FRONTEND_PORT` controlan los puertos publicados, con valores predeterminados `5000` y `5173`.
 
+### Docker Desktop detrás de DNS filtrado o inspección TLS
+
+Si Docker no resuelve `mcr.microsoft.com`, NuGet o npm, en Docker Desktop abre **Settings > Network**, configura **Inhibit DNS resolution** como **No filtering**, aplica y reinicia Docker Desktop. Si las consultas DNS del daemon siguen fallando, configura un DNS accesible desde la red en Docker Desktop **Settings > Docker Engine** (por ejemplo, `"dns": ["8.8.8.8"]`) y aplica. La configuración del daemon es local al equipo.
+
+Si la red inspecciona TLS con una CA privada, exporta esa CA raíz en formato PEM a un archivo local, ignorado por Git (por ejemplo, `.local-certs/organization-root.crt`) y cambia `DOCKER_CA_CERT_PATH` en `.env` para señalarlo. Compose la monta como secreto de build; los Dockerfiles instalan la CA para verificar TLS durante restore/npm y en el backend en ejecución. Sin inspección TLS, conserva `.local-certs/empty.pem`. No desactives la validación de certificados ni publiques la CA local.
+
+Si las imágenes base ya están descargadas localmente y el daemon aún no alcanza un registry, `DOTNET_RUNTIME_IMAGE` y `NODE_BASE_IMAGE` permiten seleccionar esas imágenes sin cambiar Dockerfiles; sus valores normales son `mcr.microsoft.com/dotnet/aspnet:8.0` y `node:20-alpine`. Por ejemplo, se puede usar localmente una imagen SDK .NET 10 como runtime con `DOTNET_ROLL_FORWARD=Major`; la aplicación sigue compilándose para .NET 8.
+
 Compose lee el `.env` raíz y pasa la URL de Node al backend como `MockApi__BaseUrl`. El frontend llama al puerto publicado del backend. `.env` está ignorado por Git y excluido de los contextos Docker; `.env.example` es la plantilla segura versionada.
 
 ## Ejecución con Docker

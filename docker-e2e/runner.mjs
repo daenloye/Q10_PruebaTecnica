@@ -129,8 +129,8 @@ try {
   })
 
   const studentAnswer = await chat(studentToken, '¿Cuál es la nota mínima para aprobar una asignatura y en qué escala se califica?')
-  assert.equal(studentAnswer.status, 200, `Consulta de estudiante respondió ${studentAnswer.status}: ${await studentAnswer.text()}`)
   const studentChat = await json(studentAnswer)
+  assert.equal(studentAnswer.status, 200, `Consulta de estudiante respondió ${studentAnswer.status}: ${JSON.stringify(studentChat)}`)
   assert.ok(studentChat.answer?.trim(), 'Gemini debe devolver una respuesta no vacía')
   assert.match(studentChat.answer, /3[.,]0/)
   assert.ok(studentChat.sources?.includes('rules.md'), 'La respuesta debe declarar rules.md como fuente')
@@ -145,8 +145,9 @@ try {
     })
   }
   const coordinatorAnswer = await chat(coordinatorToken, `¿Qué reglas de acceso rigen a un coordinador del programa ${firstProgram.id}?`)
-  assert.equal(coordinatorAnswer.status, 200, `Consulta de coordinador respondió ${coordinatorAnswer.status}: ${await coordinatorAnswer.text()}`)
-  assert.ok((await json(coordinatorAnswer)).answer?.trim(), 'La consulta permitida del coordinador debe responder')
+  const coordinatorChat = await json(coordinatorAnswer)
+  assert.equal(coordinatorAnswer.status, 200, `Consulta de coordinador respondió ${coordinatorAnswer.status}: ${JSON.stringify(coordinatorChat)}`)
+  assert.ok(coordinatorChat.answer?.trim(), 'La consulta permitida del coordinador debe responder')
   report.push('PASS  sesión de coordinador consulta dentro de su rol')
 
   console.log(report.join('\n'))

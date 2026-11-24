@@ -1,7 +1,11 @@
-FROM node:20-alpine
+ARG NODE_BASE_IMAGE=node:20-alpine
+FROM ${NODE_BASE_IMAGE}
 WORKDIR /app
 COPY package.json ./
-RUN npm install
+RUN --mount=type=secret,id=docker-ca,target=/tmp/docker-ca.crt,required=false \
+    if [ -s /tmp/docker-ca.crt ] && grep -q "BEGIN CERTIFICATE" /tmp/docker-ca.crt; then \
+      NODE_EXTRA_CA_CERTS=/tmp/docker-ca.crt npm install; \
+    else npm install; fi
 COPY . .
 ENV HOST=0.0.0.0
 EXPOSE 5173

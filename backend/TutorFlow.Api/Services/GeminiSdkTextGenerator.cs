@@ -6,9 +6,11 @@ namespace TutorFlow.Api.Services;
 public sealed class GeminiSdkTextGenerator : IGeminiTextGenerator, IDisposable
 {
     private readonly Client? _client;
+    private readonly ILogger<GeminiSdkTextGenerator>? _logger;
 
-    public GeminiSdkTextGenerator(IConfiguration configuration)
+    public GeminiSdkTextGenerator(IConfiguration configuration, ILogger<GeminiSdkTextGenerator>? logger = null)
     {
+        _logger = logger;
         var apiKey = configuration["GEMINI_API_KEY"];
         if (!string.IsNullOrWhiteSpace(apiKey))
         {
@@ -51,10 +53,12 @@ public sealed class GeminiSdkTextGenerator : IGeminiTextGenerator, IDisposable
         }
         catch (ApiException exception)
         {
+            _logger?.LogWarning("Gemini API returned HTTP {StatusCode}.", exception.StatusCode);
             throw MapApiException(exception);
         }
         catch (HttpRequestException exception)
         {
+            _logger?.LogWarning("Gemini request failed with network error {ErrorType}.", exception.GetType().Name);
             throw new GeminiAgentException(502, "gemini_network_error",
                 "No fue posible conectar con Gemini. Revisa tu conexión e inténtalo de nuevo.", exception);
         }

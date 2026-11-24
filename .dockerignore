@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+.local-certs/
 **/bin/
 **/obj/
 frontend/node_modules/
