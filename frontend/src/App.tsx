@@ -34,17 +34,30 @@ export default function App() {
   const user = users.find((candidate) => candidate.id === selectedId) ?? null
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/users`)
-      .then(async (response) => {
+    const controller = new AbortController()
+    let cancelled = false
+
+    async function loadUsers() {
+      try {
+        const response = await fetch(`${API_BASE}/api/users`, { signal: controller.signal })
         if (!response.ok) throw new Error(await readError(response))
-        return (await response.json()) as DemoUser[]
-      })
-      .then((available) => {
+        const available = (await response.json()) as DemoUser[]
+        if (cancelled) return
         setUsers(available)
         setSelectedId(available[0]?.id ?? '')
-      })
-      .catch((reason: Error) => setError(`No se pudo conectar con TutorFlow: ${reason.message}`))
-      .finally(() => setLoading(false))
+      } catch (reason) {
+        if (cancelled || (reason instanceof DOMException && reason.name === 'AbortError')) return
+        setError(`No se pudo conectar con TutorFlow: ${reason instanceof Error ? reason.message : 'error inesperado'}`)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    void loadUsers()
+    return () => {
+      cancelled = true
+      controller.abort()
+    }
   }, [])
 
   useEffect(() => {

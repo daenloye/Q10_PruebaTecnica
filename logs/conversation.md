@@ -133,3 +133,11 @@
 **Cambios:** README raíz consolida configuración `.env`, puertos, CA/imágenes base opcionales, endpoint directo y decisiones del prototipo; añadí un bloque PowerShell copiables para salud, listado de usuarios, chat directo, logs y pruebas. Revisé `docs/architecture-decisions.md`, `rules.md`, `api.md`, README de backend/frontend y README del proyecto .NET: describen respectivamente los permisos y controles de producción, reglamento vigente, mock API y contrato sin sesión.
 
 **Verificación:** `docker compose ps` mostró mock-api, backend y frontend `healthy`. `/salud`, `/programas`, `/api/health`, `/api/users` y frontend respondieron HTTP 200. `.env` aparece ignorado, no está en el índice Git y no hay otros cambios previos sin documentar. Las URLs locales son `http://localhost:5173`, `http://localhost:5000` y `http://localhost:4000`.
+
+## Error de carga React y favicon
+
+**Usuario:** Reportó un error de desmontaje de `<App>` relacionado con efecto async y un 404 para `/favicon.ico`; solicitó corregirlo, reconstruir frontend en Docker y dejar servicios listos.
+
+**Cambios:** El efecto de carga de usuarios ahora es síncrono y declara/invoca internamente `loadUsers()`, con `AbortController`, flag de cancelación y manejo de abortos. La revisión no encontró otros `useEffect` que devuelvan Promises. Se agregó un favicon ICO de 32×32 en `frontend/public/favicon.ico` y el enlace desde `frontend/index.html`.
+
+**Verificación:** Build TypeScript/Vite completado dentro del contenedor. `/`, `/src/App.tsx` y `/favicon.ico` respondieron HTTP 200; el favicon se sirve como `image/x-icon` y mide 4286 bytes. Los tres servicios aparecen saludables en Docker. `.env` sigue ignorado y fuera del índice Git.
