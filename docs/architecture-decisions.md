@@ -12,7 +12,7 @@ Se conserva .NET 8 o superior, conforme al stack solicitado para la prueba. ASP.
 
 ## Interfaz: Angular en lugar de React
 
-El frontend entregado está implementado en Angular y TypeScript. Angular aporta una organización modular y convenciones consistentes para separar componentes y servicios. `BackendApiService` concentra las llamadas HTTP, mientras la vista se ocupa del selector de perfil y del chat. Esta separación favorece mantenimiento y ampliación del cliente.
+React se exploró inicialmente porque era el stack de interfaz indicado al comienzo de la prueba. La implementación final usa Angular y TypeScript. Angular aporta una organización modular y convenciones consistentes para separar componentes y servicios. `BackendApiService` concentra las llamadas HTTP, mientras la vista se ocupa del selector de perfil y del chat. Esta separación favorece mantenimiento y ampliación del cliente.
 
 Durante las iteraciones del prototipo en React, los problemas repetidos con el ciclo de vida de efectos y la confusión entre código servido y builds anteriores hicieron más difícil estabilizar la validación en navegador. Se migró a Angular para entregar una estructura más clara y un proceso reproducible. La configuración actual de Docker compila y sirve Angular; React fue retirado.
 

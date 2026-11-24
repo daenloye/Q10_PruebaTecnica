@@ -20,7 +20,7 @@ El cliente envía un perfil de demostración y la pregunta. El backend valida el
 ## Decisiones finales
 
 - **.NET:** se mantiene el backend solicitado en ASP.NET Core sobre .NET 8 o superior.
-- **Angular:** reemplazó React para usar una arquitectura modular y servicios separados de la interfaz. Además, durante la estabilización de React se repitieron confusiones entre efectos del componente y builds servidos; Angular dejó una estructura de cliente más predecible para esta entrega.
+- **Migración de React a Angular:** React fue la opción inicial porque era el stack de interfaz indicado al comienzo de la prueba. Durante su estabilización se repitieron problemas con efectos del componente y discrepancias entre el código y los builds servidos. La decisión posterior de migrar a Angular permitió usar una estructura modular, un servicio HTTP separado de la vista y una base más clara para mantenimiento y crecimiento. La interfaz de esta entrega es Angular.
 - **Sin login en la demo:** enviar un ID ficticio agiliza las pruebas de roles desde el navegador o REST. El ID no autentica a la persona ni debe emplearse con datos reales.
 - **Seguridad:** la entrega conserva validación de mensajes, filtro heurístico de inyección y autorización de los datos por alcance. Omite autenticación y controles avanzados de producción. Para producción se contemplan OAuth/OIDC, tokens firmados con expiración, refresh tokens, claims verificados, CSRF cuando corresponda, HTTPS/TLS, CORS estricto, limitación de tasa, auditoría y gestión segura de secretos.
 - **API académica:** el backend consulta la API mock en ejecución por HTTP. `MOCK_API_URL` permite cambiar el destino sin alterar código.

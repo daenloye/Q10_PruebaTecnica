@@ -1,6 +1,6 @@
 # TutorFlow — Frontend Angular
 
-Interfaz Angular 21 y TypeScript. Presenta el selector **Preguntar como**, el chat y las respuestas. `BackendApiService` contiene la comunicación HTTP con el backend para que el componente principal se concentre en la interfaz. React no forma parte del frontend entregado.
+Interfaz Angular 21 y TypeScript. Presenta el selector **Preguntar como**, el chat y las respuestas. `BackendApiService` contiene la comunicación HTTP con el backend para que el componente principal se concentre en la interfaz.
 
 ## Requisitos y configuración
 
