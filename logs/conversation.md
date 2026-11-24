@@ -141,3 +141,11 @@
 **Cambios:** El efecto de carga de usuarios ahora es síncrono y declara/invoca internamente `loadUsers()`, con `AbortController`, flag de cancelación y manejo de abortos. La revisión no encontró otros `useEffect` que devuelvan Promises. Se agregó un favicon ICO de 32×32 en `frontend/public/favicon.ico` y el enlace desde `frontend/index.html`.
 
 **Verificación:** Build TypeScript/Vite completado dentro del contenedor. `/`, `/src/App.tsx` y `/favicon.ico` respondieron HTTP 200; el favicon se sirve como `image/x-icon` y mide 4286 bytes. Los tres servicios aparecen saludables en Docker. `.env` sigue ignorado y fuera del índice Git.
+
+### Revalidación con build sin caché
+
+**Usuario:** Reportó que seguía viendo el mismo error y solicitó verificar el código tanto local como dentro del contenedor, reconstruir sin caché y revisar CI/CD.
+
+**Hallazgos/acciones:** SHA-256 de `frontend/src/App.tsx` y `/app/src/App.tsx` coinciden (`266ab1cbbf1385b38a47e58c2fd76027bdf55047a20fe0ff00b3736722575ade`); el favicon local coincide con `/app/public/favicon.ico`. `docker inspect` reporta `Mounts: []`. Se ejecutó `docker compose build --no-cache frontend` y se recreó el servicio. El repositorio no contiene workflows/pipelines CI/CD configurados.
+
+**Verificación:** `npm run build` TypeScript/Vite pasó dentro del contenedor. El módulo servido sin caché no contiene `useEffect(async...)`, `useEffect(() => async...)` ni `async () =>`; sí contiene la función async interna `loadUsers`. `/`, `/src/App.tsx` y `/favicon.ico?cachebust=...` devolvieron 200; favicon `image/x-icon`, 4286 bytes. Mock API, backend y frontend permanecen `healthy`. `.env` sigue ignorado y sin rastrear.
