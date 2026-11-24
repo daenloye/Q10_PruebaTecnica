@@ -1,39 +1,72 @@
 # TutorFlow
 
-TutorFlow es un prototipo de asistente académico para responder consultas con el reglamento institucional, la especificación de la API simulada y los datos autorizados por rol.
+Asistente académico de prueba técnica para estudiantes y coordinadores. El frontend React/TypeScript consume una API ASP.NET Core (.NET 8) que autentica con sesión opaca única, limita los datos académicos por rol, carga `rules.md` y `api.md`, consulta la API mock de Node y envía las consultas autorizadas a Google Gemini.
 
-## Estructura
+## Resumen del sistema
 
-- `backend/`: API ASP.NET Core con .NET 8, sesión única, autorización por rol y adaptador desacoplado del agente.
-- `frontend/`: interfaz React + TypeScript para seleccionar usuario demo e interactuar por chat.
-- `docs/architecture-decisions.md`: decisiones de simplicidad y alcance de seguridad del prototipo.
-- `rules.md` y `api.md`: fuentes Markdown de conocimiento que el backend carga.
-- `initial_docs/mock-api/`: API de datos simulados existente.
+- API mock Node en `initial_docs/mock-api/`, con healthcheck y datos de programas, coordinadores, estudiantes, notas y asistencia.
+- Backend .NET 8 con SDK de compilación .NET `10.0.404`, login de usuario demo, token único en memoria, controles anti-inyección, reglas de permisos y adaptador Gemini.
+- Frontend React + TypeScript para seleccionar usuario y conversar con el agente.
+- Pruebas locales para autenticación, validación, roles, inyección, cuota y configuración; pruebas opt-in con Gemini y runner E2E para el sistema en Docker.
+- Compose define healthchecks y orden de arranque entre los tres servicios principales.
 
-## Inicio con Docker
+Consulta el [documento de arquitectura y decisiones](docs/architecture-decisions.md) para el flujo de datos, roles, sesión y simplificaciones de seguridad de esta prueba.
 
-Requisito: Docker Desktop o Docker Engine con Docker Compose v2 activo.
+## Configuración
 
-1. Copia `.env.example` a `.env` si aún no existe y conserva/configura `GEMINI_API_KEY` y `GEMINI_MODEL`.
-2. Edita en `.env` `MOCK_API_URL` (URL que usa el backend dentro de la red Compose) y `MOCK_API_PORT` (puerto de la mock API publicado en el host). Si cambias el puerto interno del servicio, actualiza también el puerto en `MOCK_API_URL` y en `docker-compose.yml`. `BACKEND_PORT` y `FRONTEND_PORT` cambian los puertos publicados de esos servicios.
-3. Desde la raíz, ejecuta `docker compose up -d --build`.
-4. Revisa el arranque con `docker compose ps` y `docker compose logs -f`.
-5. Abre el frontend y selecciona un usuario de prueba.
+Requisitos: Docker Desktop/Engine y Docker Compose v2; una clave de Google Gemini para respuestas reales.
 
-URLs predeterminadas:
+1. Copia `.env.example` como `.env` en la raíz. En PowerShell: `Copy-Item .env.example .env`.
+2. Edita `.env` y configura `GEMINI_API_KEY`; opcionalmente selecciona `GEMINI_MODEL` (por defecto `gemini-3.5-flash-lite`). No publiques ni agregues `.env` a Git.
+3. Configura la API Node:
+   - `MOCK_API_URL` es la URL que el backend usa dentro de la red Compose; por defecto `http://mock-api:4000/`.
+   - `MOCK_API_PORT` es el puerto del host para consultar esa API desde el navegador o herramientas locales; por defecto `4000`.
+   - Si cambias el puerto interno del servicio Node, sincroniza el puerto en `.env`, `MOCK_API_URL` y `docker-compose.yml`. Cambiar solo `MOCK_API_PORT` modifica el puerto publicado, no el interno.
+4. `BACKEND_PORT` y `FRONTEND_PORT` controlan los puertos publicados, con valores predeterminados `5000` y `5173`.
+
+Compose lee el `.env` raíz y pasa la URL de Node al backend como `MockApi__BaseUrl`. El frontend llama al puerto publicado del backend. `.env` está ignorado por Git y excluido de los contextos Docker; `.env.example` es la plantilla segura versionada.
+
+## Ejecución con Docker
+
+Desde la raíz del repositorio:
+
+```powershell
+docker compose up -d --build
+docker compose ps
+docker compose logs -f
+```
+
+Cuando los servicios estén `healthy`, abre el chat y elige un usuario de prueba:
 
 - Frontend/chat: <http://localhost:5173>
-- Backend: <http://localhost:5000>; salud: <http://localhost:5000/api/health>
-- Mock API: <http://localhost:4000>; salud: <http://localhost:4000/salud>
+- Salud del backend: <http://localhost:5000/api/health>
+- Usuarios de prueba: <http://localhost:5000/api/auth/users>
+- API mock: <http://localhost:4000/salud> y <http://localhost:4000/programas>
 
-Para detener los servicios usa `docker compose down`. `.env` se usa solo localmente, está excluido de Git y del contexto de build; no compartas su clave de Gemini.
+Para ejecutar el flujo E2E dentro de la red Docker, con el backend y frontend levantados:
 
-## Inicio manual de desarrollo
+```powershell
+docker compose --profile test run --build --rm docker-e2e
+```
 
-1. Copia `.env.example` a `.env` en la raíz y define `GEMINI_API_KEY` (y opcionalmente `GEMINI_MODEL`). Nunca agregues `.env` a Git.
-2. Inicia la API académica para habilitar datos personalizados: desde `initial_docs/mock-api/`, ejecuta `node server.js`.
-3. Inicia el backend .NET 8: `cd backend/TutorFlow.Api` y `dotnet run --urls http://localhost:5000`.
-4. Inicia el frontend: `cd frontend`, `npm install`, `npm run dev`.
-5. Abre `http://localhost:5173` y selecciona cualquiera de los usuarios ficticios. El chat envía el token de sesión al backend.
+El runner consulta `MOCK_API_URL` desde `.env`, valida salud de los tres servicios, descubrimiento de perfiles, tokens de sesión, anti-inyección, contexto, acceso estudiante/coordinador y respuestas/fuentes de Gemini. La suite local (sin consumo de cuota) se ejecuta con `dotnet test backend/TutorFlow.sln`. Para activar las pruebas .NET opt-in de Gemini y su E2E con la API mock propia de tests:
 
-El backend y el frontend incluyen sus propios README con detalles. El backend usa el SDK oficial de Google Gemini; consulta `docs/architecture-decisions.md` para el flujo de contexto y permisos.
+```powershell
+$env:RUN_GEMINI_INTEGRATION_TESTS = "true"
+dotnet test backend/TutorFlow.sln
+Remove-Item Env:RUN_GEMINI_INTEGRATION_TESTS
+```
+
+Estas consultas reales pueden consumir cuota. Las pruebas locales cubren también errores controlados de cuota 429 y configuración de clave ausente.
+
+Para apagar los servicios: `docker compose down`. Para ver fallos: `docker compose logs backend frontend mock-api`.
+
+## URLs y puertos predeterminados
+
+| Servicio | URL en el host | Puerto interno Docker |
+|---|---|---:|
+| Frontend React/Vite | `http://localhost:5173` | 5173 |
+| Backend ASP.NET Core | `http://localhost:5000` | 8080 |
+| API mock Node | `http://localhost:4000` | 4000 |
+
+El perfil de prueba `docker-e2e` es temporal y no reemplaza los contenedores persistentes. Mantén `docker compose up -d` ejecutándose para validación humana.
