@@ -2,7 +2,7 @@
 
 ## Alcance
 
-TutorFlow separa la interfaz React/TypeScript (`frontend/`) de la API ASP.NET Core .NET 8 (`backend/`). El backend carga `rules.md` y `api.md`, consulta la mock API para datos académicos y envía el contexto autorizado a Gemini mediante `IAgentClient`.
+TutorFlow separa la interfaz Angular/TypeScript (`frontend/`) de la API ASP.NET Core .NET 8 (`backend/`). `BackendApiService` concentra las llamadas REST y el componente solo gestiona el selector/chat. La URL REST se carga desde configuración runtime (`BACKEND_API_URL` en Docker o `frontend/public/config.json` en desarrollo local). El backend carga `rules.md` y `api.md`, consulta la mock API para datos académicos y envía el contexto autorizado a Gemini mediante `IAgentClient`.
 
 ## Identidad de prueba y API directa
 

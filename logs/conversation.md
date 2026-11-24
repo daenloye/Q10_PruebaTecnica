@@ -163,3 +163,13 @@
 **Usuario:** Solicitó comprobar qué cambios existen realmente en disco y preparar comandos exactos para ejecutar Docker y el commit desde PowerShell/WSL con permisos completos, sin insistir en operaciones bloqueadas.
 
 **Verificado:** `frontend/src/App.tsx` existe y sus tres `useEffect` son síncronos; el primero invoca `async function loadUsers()` y retorna cleanup síncrono con `controller.abort()`. `frontend/public/favicon.ico` existe (4286 bytes; encabezado ICO válido). Los fixes frontend aparecen en el historial Git bajo `a4df052` y commits anteriores. `git status --short` muestra únicamente `M logs/conversation.md`; `.git/index.lock` no existe. `.env` está ignorado por `.gitignore` y no figura en el índice. Docker, npm y commit no se reintentaron en esta revisión.
+
+## Migración de React a Angular y contrato backend
+
+**Usuario:** Solicitó sustituir React por Angular, aislar las llamadas REST en un servicio, documentar los endpoints .NET, agregar pruebas, actualizar Docker y ejecutar las suites.
+
+**Cambios:** `frontend/` ahora usa Angular 21 + TypeScript con `BackendApiService` para `GET /api/users` y `POST /api/chat/messages`, configuración runtime `BACKEND_API_URL` (`config.json`) y vista de selector/chat. Se eliminaron los entrypoints, configuración Vite y dependencias React. El frontend se compila a archivos estáticos y `server.mjs` los sirve junto con `/config.json` y `/health`. Compose pasa la URL del backend y el origen CORS configurables. Se añadió `docs/backend-endpoints.md` con DTO, roles, códigos y ejemplos; README/decisiones/AGENTS se actualizaron. El runner E2E comprueba el shell Angular, bundles y configuración. Se corrigió para inspeccionar todos los bundles, incluido el principal y no solo polyfills.
+
+**Pruebas:** `npm ci`, `npm run build` y `npm test` pasaron; 2 archivos y 4 pruebas Vitest aprobaron. `dotnet test backend/TutorFlow.sln` pasó con 14 aprobadas y 2 pruebas opt-in Gemini omitidas. `docker compose config --quiet` pasó. Servidor estático comprobado manualmente: raíz Angular, `/health`, `/config.json`, favicon y bundle respondieron correctamente; el bundle contiene ambos endpoints. E2E integrado local: 9 verificaciones previas a Gemini pasaron; la solicitud real a Gemini devolvió HTTP 503 y el backend tradujo el fallo a 502 tras los reintentos configurados.
+
+**Límite Docker:** `docker compose up -d --build mock-api backend frontend` no pudo conectar con `npipe:////./pipe/dockerDesktopLinuxEngine`; el pipe no existe en esta sesión, por lo que no se levantó el stack Docker ni se ejecutó el runner en contenedor. Los procesos locales mock/backend/frontend usados para el E2E fueron detenidos.

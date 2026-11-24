@@ -1,16 +1,18 @@
 # TutorFlow
 
-Asistente académico de prueba técnica. La interfaz React/TypeScript y la API ASP.NET Core (.NET 8) permiten elegir un perfil ficticio y consultar reglamento y datos académicos con permisos de estudiante/coordinador aplicados en el backend. El servicio puede consumirse directamente por REST, sin usar la interfaz.
+Asistente académico de prueba técnica. La interfaz Angular/TypeScript y la API ASP.NET Core (.NET 8) permiten elegir un perfil ficticio y consultar reglamento y datos académicos con permisos de estudiante/coordinador aplicados en el backend. El servicio puede consumirse directamente por REST, sin usar la interfaz.
 
 ## Arquitectura y decisiones
 
 - Mock API Node en `initial_docs/mock-api/` con programas, estudiantes, coordinadores, notas y asistencia.
 - Backend .NET 8, compilado con SDK `10.0.404`, con controles de entrada, anti-inyección, autorización por rol, documentación/contexto y adaptador Gemini.
-- Frontend React + TypeScript en una vista: selector **Preguntar como**, chat y respuestas.
+- Frontend Angular + TypeScript en una vista: selector **Preguntar como**, chat y respuestas. `BackendApiService` concentra la comunicación HTTP.
 - `GET /api/users` lista perfiles y roles. `POST /api/chat/messages` acepta el ID y el mensaje, sin login ni token de sesión.
 - Suites .NET unitarias y E2E Docker; pruebas opt-in que consultan Gemini.
 
 Consulta [arquitectura y decisiones](docs/architecture-decisions.md) para la justificación de la identidad directa de prueba, límites de permisos y controles que se requieren en producción.
+
+Consulta también el [contrato de endpoints del backend .NET](docs/backend-endpoints.md) para integrar cualquier cliente REST.
 
 ### Simplificación de identidad para la prueba
 
@@ -21,7 +23,7 @@ En producción se autenticarían usuarios con OAuth2/OIDC y JWT firmados/expirab
 ## Configuración y Docker
 
 1. Copia `.env.example` a `.env` (`Copy-Item .env.example .env`) y configura `GEMINI_API_KEY`. `GEMINI_MODEL` es opcional. No subas `.env`.
-2. `MOCK_API_URL` configura la URL interna de Node (predeterminada `http://mock-api:4000/`); `MOCK_API_PORT`, `BACKEND_PORT` y `FRONTEND_PORT` controlan puertos publicados (4000, 5000 y 5173 por defecto).
+2. `MOCK_API_URL` configura la URL interna de Node (predeterminada `http://mock-api:4000/`); `MOCK_API_PORT`, `BACKEND_PORT` y `FRONTEND_PORT` controlan puertos publicados (4000, 5000 y 5173 por defecto). `BACKEND_API_URL` configura el backend que Angular usa en runtime (por defecto `http://localhost:5000`); en desarrollo local se puede editar `frontend/public/config.json`.
 3. Levanta y comprueba los servicios:
 
 ```powershell
@@ -66,8 +68,11 @@ docker compose --profile test run --rm docker-e2e
 ## Pruebas
 
 ```powershell
+npm --prefix frontend install
+npm --prefix frontend run build
+npm --prefix frontend test
 dotnet test backend/TutorFlow.sln
 docker compose --profile test run --build --rm docker-e2e
 ```
 
-Las pruebas locales usan un adaptador falso y no consumen cuota. El runner Docker valida el selector/listado REST, flujo directo por estudiante/coordinador, entrada inválida, anti-inyección, límites entre programas y respuestas reales Gemini. Para las pruebas opt-in .NET con Gemini configura `RUN_GEMINI_INTEGRATION_TESTS=true`; pueden consumir cuota. Para apagar el entorno: `docker compose down`.
+Las pruebas Angular usan `HttpTestingController` para las peticiones HTTP y verifican selector/envío en el componente. Las pruebas .NET locales usan un adaptador falso y no consumen cuota. El runner Docker valida que el bundle Angular y la configuración runtime se sirven correctamente, además del listado REST, flujo directo por estudiante/coordinador, entrada inválida, anti-inyección, límites entre programas y respuestas reales Gemini. Para las pruebas opt-in .NET con Gemini configura `RUN_GEMINI_INTEGRATION_TESTS=true`; pueden consumir cuota. Para apagar el entorno: `docker compose down`.

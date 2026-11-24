@@ -51,7 +51,25 @@ try {
     const response = await request(frontendBase, '')
     assert.equal(response.status, 200)
     const html = await response.text()
-    assert.match(html, /TutorFlow|\/src\/main\.tsx/i)
+    assert.match(html, /<app-root/i)
+    assert.match(html, /TutorFlow/i)
+    const scriptPaths = [...html.matchAll(/<script[^>]+src="([^"]+\.js)"/gi)].map(match => match[1])
+    assert.ok(scriptPaths.length > 0, 'Angular debe publicar bundles JavaScript compilados')
+    const bundles = await Promise.all(scriptPaths.map(async scriptPath => {
+      const bundleResponse = await request(frontendBase, scriptPath)
+      assert.equal(bundleResponse.status, 200)
+      return bundleResponse.text()
+    }))
+    const bundle = bundles.join('\n')
+    assert.match(bundle, /api\/users/)
+    assert.match(bundle, /api\/chat\/messages/)
+  })
+
+  await check('configuración runtime Angular entrega una URL REST', async () => {
+    const response = await request(frontendBase, 'config.json')
+    assert.equal(response.status, 200)
+    const config = await json(response)
+    assert.match(config.apiBaseUrl, /^https?:\/\//)
   })
 
   await check('backend saludable', async () => {

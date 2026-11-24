@@ -5,9 +5,10 @@ using TutorFlow.Api.Services;
 DotEnvLoader.LoadFromRepository();
 var builder = WebApplication.CreateBuilder(args);
 var mockBaseUrl = builder.Configuration["MockApi:BaseUrl"] ?? "http://localhost:4000/";
+var frontendOrigin = builder.Configuration["Frontend:Origin"] ?? "http://localhost:5173";
 
 builder.Services.AddCors(options => options.AddPolicy("local-frontend", policy =>
-    policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod()));
+    policy.WithOrigins(frontendOrigin).AllowAnyHeader().AllowAnyMethod()));
 builder.Services.AddTransient<KnowledgeContextService>();
 builder.Services.AddSingleton<IGeminiTextGenerator, GeminiSdkTextGenerator>();
 builder.Services.AddSingleton<IAgentClient, GeminiAgentClient>();

@@ -1,0 +1,45 @@
+<main class="app-shell">
+  <aside class="sidebar">
+    <div class="brand"><div class="brand-symbol">✳</div><span>Tutor<span>Flow</span></span></div>
+    <div class="side-divider"></div>
+    <label class="workspace-label" for="demo-user">PREGUNTAR COMO</label>
+    <div class="user-selector">
+      <select id="demo-user" [ngModel]="selectedUserId" (ngModelChange)="selectUser($event)" [disabled]="loadingUsers || sending || users.length === 0">
+        <option *ngIf="loadingUsers" value="">Cargando usuarios…</option>
+        <option *ngIf="!loadingUsers && users.length === 0" value="">No hay usuarios disponibles</option>
+        <option *ngFor="let user of users" [value]="user.id">{{ user.name }} · {{ roleLabel(user.role) }}</option>
+      </select>
+    </div>
+    <p *ngIf="selectedUser as user" class="selected-user-detail">
+      {{ user.id }}<ng-container *ngIf="user.programId"> · {{ user.programId }}</ng-container><ng-container *ngIf="!user.programId && user.programIds.length"> · {{ user.programIds.join(', ') }}</ng-container>
+    </p>
+    <div class="sidebar-bottom">
+      <div class="help-card"><div class="help-icon">✦</div><strong>¿Necesitas orientación?</strong><p>TutorFlow aplica los permisos asociados al usuario seleccionado.</p></div>
+    </div>
+  </aside>
+  <section class="chat-area">
+    <header class="topbar">
+      <div class="breadcrumb">TutorFlow <span>/</span> <strong>Asistente</strong></div>
+      <div class="connection"><span class="status-dot"></span>{{ selectedUser ? roleLabel(selectedUser.role) + ' · ' + selectedUser.name : 'Conectando' }}</div>
+    </header>
+    <div class="chat-content">
+      <div class="chat-heading"><div class="assistant-mark">✦</div><div><p class="eyebrow">ASISTENTE ACADÉMICO</p><h1>¿En qué te puedo ayudar?</h1><p>Pregunta sobre el reglamento o la información disponible para el usuario seleccionado.</p></div></div>
+      <div class="messages" aria-live="polite">
+        <article *ngFor="let message of messages; let index = index" class="message-row" [class.user]="message.role === 'user'" [class.assistant]="message.role === 'assistant'">
+          <div *ngIf="message.role === 'assistant'" class="message-avatar">✦</div>
+          <div class="message-content"><div class="message-bubble">{{ message.content }}</div><div *ngIf="message.sources?.length" class="sources">Fuentes: {{ message.sources?.join(' · ') }}</div></div>
+        </article>
+        <article *ngIf="sending" class="message-row assistant"><div class="message-avatar">✦</div><div class="typing"><i></i><i></i><i></i></div></article>
+      </div>
+      <div class="composer-wrap">
+        <p *ngIf="error" class="error-banner chat-error" role="alert">{{ error }}</p>
+        <form class="composer" (ngSubmit)="sendMessage()">
+          <textarea [(ngModel)]="draft" name="message" (keydown)="onComposerKeydown($event)" rows="1" maxlength="2000" placeholder="Escribe tu pregunta…" aria-label="Escribe tu pregunta"></textarea>
+          <button class="send-button" type="submit" [disabled]="!draft.trim() || !selectedUser || sending" aria-label="Enviar mensaje" title="Enviar mensaje">↑</button>
+        </form>
+        <div class="composer-hint"><span>Enter para enviar</span><span>·</span><span>Shift + Enter para nueva línea</span><span class="hint-spacer"></span><span>{{ draft.length }}/2000</span></div>
+      </div>
+    </div>
+    <footer class="chat-footer">TutorFlow puede equivocarse. Verifica las decisiones académicas importantes con tu coordinación.</footer>
+  </section>
+</main>
