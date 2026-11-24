@@ -125,3 +125,11 @@
 **Cambios:** Se retiraron `/api/auth/login`, `/api/auth/logout`, `/api/auth/users`, el almacén de sesiones y los modelos de sesión. El rol se resuelve en servidor desde `UserDirectory`/mock API; ignorar el `role`/`programIds` aportado por cliente está cubierto por prueba. Frontend ahora tiene selector “Preguntar como” y chat en una vista; cada llamada envía `{ userId, message }`. Runner E2E y tests .NET usan contrato directo. README raíz, backend/frontend y `docs/architecture-decisions.md` explican uso, motivación para prueba y controles de producción (OIDC/OAuth2, JWT/refresh, claims, rate limiting, CORS, HTTPS, auditoría y gestión de secretos).
 
 **Validación:** `dotnet test backend/TutorFlow.sln`: 14 aprobadas, 2 opt-in omitidas, 0 fallidas. `npm run build` en el contenedor frontend compiló TypeScript y Vite. Runner Docker: 11 verificaciones PASS; incluye catálogo y roles desde API, usuario desconocido, anti-inyección, restricción de estudiante/coordinador, consulta directa de estudiante con respuesta real Gemini y salud de los tres servicios. Gemini dio 503/timeout transitorio en un segundo llamado durante el diagnóstico; el runner conserva una sola llamada real y verifica permisos/rol del coordinador en pruebas deterministas. Servicios quedan en 4000/5000/5173.
+
+## Documentación final y comandos de validación humana
+
+**Usuario:** Solicitó revisar la documentación completa, confirmar contenedores y proporcionar URL frontend y comandos listos para validación manual.
+
+**Cambios:** README raíz consolida configuración `.env`, puertos, CA/imágenes base opcionales, endpoint directo y decisiones del prototipo; añadí un bloque PowerShell copiables para salud, listado de usuarios, chat directo, logs y pruebas. Revisé `docs/architecture-decisions.md`, `rules.md`, `api.md`, README de backend/frontend y README del proyecto .NET: describen respectivamente los permisos y controles de producción, reglamento vigente, mock API y contrato sin sesión.
+
+**Verificación:** `docker compose ps` mostró mock-api, backend y frontend `healthy`. `/salud`, `/programas`, `/api/health`, `/api/users` y frontend respondieron HTTP 200. `.env` aparece ignorado, no está en el índice Git y no hay otros cambios previos sin documentar. Las URLs locales son `http://localhost:5173`, `http://localhost:5000` y `http://localhost:4000`.

@@ -29,6 +29,8 @@ docker compose up -d --build
 docker compose ps
 ```
 
+`DOCKER_CA_CERT_PATH` apunta de forma opcional a un certificado raíz PEM para redes con inspección TLS; el valor predeterminado es `.local-certs/empty.pem`. `DOTNET_RUNTIME_IMAGE` y `NODE_BASE_IMAGE` permiten elegir imágenes base locales si el daemon no puede acceder a registries; sus valores normales están en `.env.example`.
+
 URLs: [frontend/chat](http://localhost:5173), [salud backend](http://localhost:5000/api/health), [usuarios](http://localhost:5000/api/users), [salud mock API](http://localhost:4000/salud) y [programas](http://localhost:4000/programas).
 
 ## Uso directo de la API
@@ -43,6 +45,23 @@ curl.exe -X POST http://localhost:5000/api/chat/messages `
 ```
 
 Para probar un coordinador, usa un ID listado por `GET /api/users`, por ejemplo `COORD-01`. La respuesta exitosa contiene `answer`, `sources` y `provider`. Usuarios desconocidos/entrada inválida se rechazan con 400; las consultas a expedientes fuera del alcance del rol se rechazan con 403. La pregunta se filtra contra inyecciones antes de llamar a Gemini.
+
+### Comandos de validación humana
+
+Con Docker activo y `.env` configurado, estos comandos se pueden ejecutar desde PowerShell en la raíz:
+
+```powershell
+docker compose ps
+Invoke-RestMethod http://localhost:4000/salud | ConvertTo-Json
+Invoke-RestMethod http://localhost:5000/api/health | ConvertTo-Json
+Invoke-RestMethod http://localhost:5000/api/users | Select-Object id,name,role | Format-Table
+$body = @{ userId = "EST-001"; message = "¿Cuál es la nota mínima para aprobar?" } | ConvertTo-Json
+Invoke-RestMethod -Method Post -Uri http://localhost:5000/api/chat/messages -ContentType "application/json" -Body $body
+docker compose logs --tail 100 backend frontend mock-api
+dotnet test backend/TutorFlow.sln
+docker compose --profile test build docker-e2e
+docker compose --profile test run --rm docker-e2e
+```
 
 ## Pruebas
 

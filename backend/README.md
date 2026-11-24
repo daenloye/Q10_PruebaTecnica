@@ -27,9 +27,7 @@ Ejemplo:
 
 ```bash
 curl http://localhost:5000/api/users
-curl -X POST http://localhost:5000/api/chat/messages \
-  -H 'Content-Type: application/json' \\
-  -d '{"userId":"EST-001","message":"¿Cuál es la nota mínima para aprobar?"}'
+curl -X POST http://localhost:5000/api/chat/messages -H 'Content-Type: application/json' -d '{"userId":"EST-001","message":"¿Cuál es la nota mínima para aprobar?"}'
 ```
 
 ## Validaciones y pruebas
