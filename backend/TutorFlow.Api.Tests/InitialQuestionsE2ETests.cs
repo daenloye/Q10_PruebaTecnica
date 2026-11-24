@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -29,11 +28,7 @@ public sealed class InitialQuestionsE2ETests
         var agent = new RecordingAgentClient(null);
         using var factory = new GeminiE2EApiFactory(mockApi.BaseAddress, agent);
         using var client = factory.CreateClient();
-        var login = await client.PostAsJsonAsync("/api/auth/login", new { userId = "EST-001" });
-        login.EnsureSuccessStatusCode();
-        var session = await login.Content.ReadFromJsonAsync<LoginResponse>();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", session!.Token);
-        using var response = await client.PostAsJsonAsync("/api/chat/messages", new { message = "Resume mis notas." });
+        using var response = await client.PostAsJsonAsync("/api/chat/messages", new { userId = "EST-001", message = "Resume mis notas." });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         Assert.NotNull(agent.LastRequest);
@@ -75,17 +70,7 @@ public sealed class InitialQuestionsE2ETests
         foreach (var example in examples)
         {
             if (report.Count > 0) await Task.Delay(TimeSpan.FromSeconds(7));
-            var login = await client.PostAsJsonAsync("/api/auth/login", new { userId = example.Usuario.Id });
-            if (!login.IsSuccessStatusCode)
-            {
-                failures.Add($"Caso {example.Id}: login falló con {(int)login.StatusCode}.");
-                report.Add($"{example.Id}\t{example.Usuario.Rol}\tLOGIN FAIL\t{(int)login.StatusCode}\t{example.CitaEsperada}");
-                continue;
-            }
-
-            var loginBody = await login.Content.ReadFromJsonAsync<LoginResponse>();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", loginBody!.Token);
-            using var response = await PostChatWithTransientRetriesAsync(client, example.Pregunta);
+            using var response = await PostChatWithTransientRetriesAsync(client, example.Usuario.Id, example.Pregunta);
             var shouldBeDenied = example.RespuestaEsperada.StartsWith("Se niega", StringComparison.OrdinalIgnoreCase);
 
             if (shouldBeDenied)
@@ -155,7 +140,7 @@ public sealed class InitialQuestionsE2ETests
         }
     }
 
-    private static async Task<HttpResponseMessage> PostChatWithTransientRetriesAsync(HttpClient client, string message)
+    private static async Task<HttpResponseMessage> PostChatWithTransientRetriesAsync(HttpClient client, string userId, string message)
     {
         for (var attempt = 0; ; attempt++)
         {
@@ -163,7 +148,7 @@ public sealed class InitialQuestionsE2ETests
             HttpResponseMessage response;
             try
             {
-                response = await client.PostAsJsonAsync("/api/chat/messages", new { message }, timeout.Token);
+                response = await client.PostAsJsonAsync("/api/chat/messages", new { userId, message }, timeout.Token);
             }
             catch (OperationCanceledException) when (timeout.IsCancellationRequested)
             {

@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
@@ -21,9 +20,13 @@ public sealed class ChatPipelineTests
     {
         using var factory = new TestApiFactory();
         using var client = factory.CreateClient();
-        await LoginAsync(client, "EST-001");
-
-        var response = await client.PostAsJsonAsync("/api/chat/messages", new { message = "¿Cuál es mi promedio?" });
+        var response = await client.PostAsJsonAsync("/api/chat/messages", new
+        {
+            userId = "EST-001",
+            role = "Coordinator",
+            programIds = new[] { "ADM" },
+            message = "¿Cuál es mi promedio?"
+        });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<ChatResponse>();
@@ -45,9 +48,7 @@ public sealed class ChatPipelineTests
     {
         using var factory = new TestApiFactory();
         using var client = factory.CreateClient();
-        await LoginAsync(client, "EST-001");
-
-        var response = await client.PostAsJsonAsync("/api/chat/messages", new { message });
+        var response = await client.PostAsJsonAsync("/api/chat/messages", new { userId = "EST-001", message });
 
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         Assert.Equal(0, factory.Agent.Calls);
@@ -60,9 +61,7 @@ public sealed class ChatPipelineTests
     {
         using var factory = new TestApiFactory();
         using var client = factory.CreateClient();
-        await LoginAsync(client, "EST-001");
-
-        var response = await client.PostAsJsonAsync("/api/chat/messages", new { message });
+        var response = await client.PostAsJsonAsync("/api/chat/messages", new { userId = "EST-001", message });
 
         Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
         Assert.Equal(0, factory.Agent.Calls);
@@ -73,9 +72,7 @@ public sealed class ChatPipelineTests
     {
         using var factory = new TestApiFactory();
         using var client = factory.CreateClient();
-        await LoginAsync(client, "COORD-01");
-
-        var response = await client.PostAsJsonAsync("/api/chat/messages", new { message = "Resume el rendimiento del programa ING-SIS" });
+        var response = await client.PostAsJsonAsync("/api/chat/messages", new { userId = "COORD-01", message = "Resume el rendimiento del programa ING-SIS" });
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var request = Assert.IsType<AgentRequest>(factory.Agent.LastRequest);
@@ -90,13 +87,49 @@ public sealed class ChatPipelineTests
     {
         using var factory = new TestApiFactory(new GeminiAgentException(429, "gemini_quota_exceeded", "Cuota agotada."));
         using var client = factory.CreateClient();
-        await LoginAsync(client, "EST-001");
-
-        var response = await client.PostAsJsonAsync("/api/chat/messages", new { message = "¿Cuál es mi promedio?" });
+        var response = await client.PostAsJsonAsync("/api/chat/messages", new { userId = "EST-001", message = "¿Cuál es mi promedio?" });
 
         Assert.Equal((HttpStatusCode)429, response.StatusCode);
         using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         Assert.Equal("gemini_quota_exceeded", body.RootElement.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task DirectEndpointRejectsUnknownUserBeforeAgentDispatch()
+    {
+        using var factory = new TestApiFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/chat/messages", new { userId = "UNKNOWN-01", message = "¿Cuál es mi promedio?" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, factory.Agent.Calls);
+    }
+
+    [Fact]
+    public async Task DirectEndpointRequiresUserId()
+    {
+        using var factory = new TestApiFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.PostAsJsonAsync("/api/chat/messages", new { message = "¿Cuál es mi promedio?" });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal(0, factory.Agent.Calls);
+    }
+
+    [Fact]
+    public async Task UsersEndpointListsKnownRolesWithoutAuthentication()
+    {
+        using var factory = new TestApiFactory();
+        using var client = factory.CreateClient();
+
+        var response = await client.GetAsync("/api/users");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var users = await response.Content.ReadFromJsonAsync<DemoUser[]>();
+        Assert.Contains(users!, user => user.Id == "EST-001" && user.Role == "Student");
+        Assert.Contains(users!, user => user.Id == "COORD-01" && user.Role == "Coordinator");
     }
 
     [Fact]
@@ -151,14 +184,6 @@ public sealed class ChatPipelineTests
         Assert.Equal(4.39m, AcademicGradeCalculator.CalculateWeightedAverage(courses.Take(4)));
     }
 
-    private static async Task LoginAsync(HttpClient client, string userId)
-    {
-        var response = await client.PostAsJsonAsync("/api/auth/login", new { userId });
-        response.EnsureSuccessStatusCode();
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        var token = document.RootElement.GetProperty("token").GetString();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-    }
 }
 
 public sealed class TestApiFactory(GeminiAgentException? failure = null) : WebApplicationFactory<Program>

@@ -8,7 +8,6 @@ var mockBaseUrl = builder.Configuration["MockApi:BaseUrl"] ?? "http://localhost:
 
 builder.Services.AddCors(options => options.AddPolicy("local-frontend", policy =>
     policy.WithOrigins("http://localhost:5173").AllowAnyHeader().AllowAnyMethod()));
-builder.Services.AddSingleton<SessionStore>();
 builder.Services.AddTransient<KnowledgeContextService>();
 builder.Services.AddSingleton<IGeminiTextGenerator, GeminiSdkTextGenerator>();
 builder.Services.AddSingleton<IAgentClient, GeminiAgentClient>();
@@ -18,22 +17,10 @@ var app = builder.Build();
 app.UseCors("local-frontend");
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok", agentProvider = "gemini" }));
-app.MapGet("/api/auth/users", ListUsers);
-
-app.MapPost("/api/auth/login", Login);
-app.MapPost("/api/auth/logout", Logout);
+app.MapGet("/api/users", ListUsers);
 app.MapPost("/api/chat/messages", HandleChat);
 
 app.Run();
-
-static bool TryReadBearer(HttpRequest request, out string? token)
-{
-    token = null;
-    var value = request.Headers["Authorization"].ToString();
-    if (!value.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) return false;
-    token = value[7..].Trim();
-    return token.Length > 0;
-}
 
 static async Task<IResult> ListUsers(MockAcademicApi academicApi, CancellationToken cancellationToken)
 {
@@ -58,27 +45,25 @@ static async Task<IResult> ListUsers(MockAcademicApi academicApi, CancellationTo
     return Results.Ok(users.Values);
 }
 
-static async Task<IResult> Login(LoginRequest request, SessionStore sessions, MockAcademicApi academicApi,
+static async Task<DemoUser?> ResolveUserAsync(string? userId, MockAcademicApi academicApi,
     CancellationToken cancellationToken)
 {
-    var user = UserDirectory.Find(request.UserId);
+    if (string.IsNullOrWhiteSpace(userId)) return null;
+    var user = UserDirectory.Find(userId);
     if (user is null)
     {
-        var student = await academicApi.GetStudentAsync(request.UserId, cancellationToken);
+        var student = await academicApi.GetStudentAsync(userId, cancellationToken);
         if (student is { ValueKind: JsonValueKind.Object } studentValue && TryReadStudent(studentValue, out var dynamicStudent))
             user = dynamicStudent;
         else
         {
-            var coordinator = await academicApi.GetCoordinatorAsync(request.UserId, cancellationToken);
+            var coordinator = await academicApi.GetCoordinatorAsync(userId, cancellationToken);
             if (coordinator is { ValueKind: JsonValueKind.Object } coordinatorValue
                 && TryReadCoordinator(coordinatorValue, out var dynamicCoordinator))
                 user = dynamicCoordinator;
         }
     }
-
-    if (user is null)
-        return Results.BadRequest(new { error = "unknown_user", message = "Selecciona un usuario de prueba válido." });
-    return Results.Ok(new LoginResponse(sessions.Create(user), user));
+    return user;
 }
 
 static bool TryReadStudent(JsonElement value, out DemoUser user)
@@ -107,21 +92,18 @@ static bool TryReadCoordinator(JsonElement value, out DemoUser user)
     return true;
 }
 
-static IResult Logout(HttpRequest httpRequest, SessionStore sessions)
-{
-    if (!TryReadBearer(httpRequest, out var token) || !sessions.TryGet(token, out _))
-        return Results.Unauthorized();
-    sessions.Remove(token);
-    return Results.NoContent();
-}
-
-static async Task<IResult> HandleChat(ChatRequest request, HttpRequest httpRequest,
-    SessionStore sessions, KnowledgeContextService contextService, IAgentClient agent,
+static async Task<IResult> HandleChat(ChatRequest request, MockAcademicApi academicApi,
+    KnowledgeContextService contextService, IAgentClient agent,
     CancellationToken cancellationToken)
 {
-    // Pipeline 1: establish the authenticated identity and role from the opaque session token.
-    if (!TryReadBearer(httpRequest, out var token) || !sessions.TryGet(token, out var user) || user is null)
-        return Results.Unauthorized();
+    // Prototype identity is selected by user ID; permissions always come from the server-side directory.
+    if (string.IsNullOrWhiteSpace(request.UserId))
+        return Results.BadRequest(new { error = "invalid_user", message = "Selecciona un usuario válido." });
+    var user = await ResolveUserAsync(request.UserId, academicApi, cancellationToken);
+    if (user is null)
+        return Results.BadRequest(new { error = "unknown_user", message = "El usuario indicado no existe." });
+    if (user.Role is not ("Student" or "Coordinator"))
+        return Results.BadRequest(new { error = "invalid_role", message = "El usuario no tiene un rol válido." });
 
     var message = request.Message ?? string.Empty;
 

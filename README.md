@@ -1,80 +1,54 @@
 # TutorFlow
 
-Asistente académico de prueba técnica para estudiantes y coordinadores. El frontend React/TypeScript consume una API ASP.NET Core (.NET 8) que autentica con sesión opaca única, limita los datos académicos por rol, carga `rules.md` y `api.md`, consulta la API mock de Node y envía las consultas autorizadas a Google Gemini.
+Asistente académico de prueba técnica. La interfaz React/TypeScript y la API ASP.NET Core (.NET 8) permiten elegir un perfil ficticio y consultar reglamento y datos académicos con permisos de estudiante/coordinador aplicados en el backend. El servicio puede consumirse directamente por REST, sin usar la interfaz.
 
-## Resumen del sistema
+## Arquitectura y decisiones
 
-- API mock Node en `initial_docs/mock-api/`, con healthcheck y datos de programas, coordinadores, estudiantes, notas y asistencia.
-- Backend .NET 8 con SDK de compilación .NET `10.0.404`, login de usuario demo, token único en memoria, controles anti-inyección, reglas de permisos y adaptador Gemini.
-- Frontend React + TypeScript para seleccionar usuario y conversar con el agente.
-- Pruebas locales para autenticación, validación, roles, inyección, cuota y configuración; pruebas opt-in con Gemini y runner E2E para el sistema en Docker.
-- Compose define healthchecks y orden de arranque entre los tres servicios principales.
+- Mock API Node en `initial_docs/mock-api/` con programas, estudiantes, coordinadores, notas y asistencia.
+- Backend .NET 8, compilado con SDK `10.0.404`, con controles de entrada, anti-inyección, autorización por rol, documentación/contexto y adaptador Gemini.
+- Frontend React + TypeScript en una vista: selector **Preguntar como**, chat y respuestas.
+- `GET /api/users` lista perfiles y roles. `POST /api/chat/messages` acepta el ID y el mensaje, sin login ni token de sesión.
+- Suites .NET unitarias y E2E Docker; pruebas opt-in que consultan Gemini.
 
-Consulta el [documento de arquitectura y decisiones](docs/architecture-decisions.md) para el flujo de datos, roles, sesión y simplificaciones de seguridad de esta prueba.
+Consulta [arquitectura y decisiones](docs/architecture-decisions.md) para la justificación de la identidad directa de prueba, límites de permisos y controles que se requieren en producción.
 
-## Configuración
+### Simplificación de identidad para la prueba
 
-Requisitos: Docker Desktop/Engine y Docker Compose v2; una clave de Google Gemini para respuestas reales.
+Se elimina el login y el token para agilizar las pruebas funcionales: el selector permite cambiar de rol en un clic y cualquier consumidor REST puede llamar al backend sin pasar por la UI. La API recibe un ID ficticio y resuelve desde sus propios datos el nombre, rol y alcance; no confía en un rol enviado por el cliente. Este ID en texto plano no prueba quién es la persona y solo es apropiado para los datos demo.
 
-1. Copia `.env.example` como `.env` en la raíz. En PowerShell: `Copy-Item .env.example .env`.
-2. Edita `.env` y configura `GEMINI_API_KEY`; opcionalmente selecciona `GEMINI_MODEL` (por defecto `gemini-3.5-flash-lite`). No publiques ni agregues `.env` a Git.
-3. Configura la API Node:
-   - `MOCK_API_URL` es la URL que el backend usa dentro de la red Compose; por defecto `http://mock-api:4000/`.
-   - `MOCK_API_PORT` es el puerto del host para consultar esa API desde el navegador o herramientas locales; por defecto `4000`.
-   - Si cambias el puerto interno del servicio Node, sincroniza el puerto en `.env`, `MOCK_API_URL` y `docker-compose.yml`. Cambiar solo `MOCK_API_PORT` modifica el puerto publicado, no el interno.
-4. `BACKEND_PORT` y `FRONTEND_PORT` controlan los puertos publicados, con valores predeterminados `5000` y `5173`.
+En producción se autenticarían usuarios con OAuth2/OIDC y JWT firmados/expirables más refresh tokens, se autorizarían claims verificados en servidor y se agregarían rate limiting por usuario/IP, CORS estricto, HTTPS/TLS, auditoría y gestión centralizada de secretos.
 
-### Docker Desktop detrás de DNS filtrado o inspección TLS
+## Configuración y Docker
 
-Si Docker no resuelve `mcr.microsoft.com`, NuGet o npm, en Docker Desktop abre **Settings > Network**, configura **Inhibit DNS resolution** como **No filtering**, aplica y reinicia Docker Desktop. Si las consultas DNS del daemon siguen fallando, configura un DNS accesible desde la red en Docker Desktop **Settings > Docker Engine** (por ejemplo, `"dns": ["8.8.8.8"]`) y aplica. La configuración del daemon es local al equipo.
-
-Si la red inspecciona TLS con una CA privada, exporta esa CA raíz en formato PEM a un archivo local, ignorado por Git (por ejemplo, `.local-certs/organization-root.crt`) y cambia `DOCKER_CA_CERT_PATH` en `.env` para señalarlo. Compose la monta como secreto de build; los Dockerfiles instalan la CA para verificar TLS durante restore/npm y en el backend en ejecución. Sin inspección TLS, conserva `.local-certs/empty.pem`. No desactives la validación de certificados ni publiques la CA local.
-
-Si las imágenes base ya están descargadas localmente y el daemon aún no alcanza un registry, `DOTNET_RUNTIME_IMAGE` y `NODE_BASE_IMAGE` permiten seleccionar esas imágenes sin cambiar Dockerfiles; sus valores normales son `mcr.microsoft.com/dotnet/aspnet:8.0` y `node:20-alpine`. Por ejemplo, se puede usar localmente una imagen SDK .NET 10 como runtime con `DOTNET_ROLL_FORWARD=Major`; la aplicación sigue compilándose para .NET 8.
-
-Compose lee el `.env` raíz y pasa la URL de Node al backend como `MockApi__BaseUrl`. El frontend llama al puerto publicado del backend. `.env` está ignorado por Git y excluido de los contextos Docker; `.env.example` es la plantilla segura versionada.
-
-## Ejecución con Docker
-
-Desde la raíz del repositorio:
+1. Copia `.env.example` a `.env` (`Copy-Item .env.example .env`) y configura `GEMINI_API_KEY`. `GEMINI_MODEL` es opcional. No subas `.env`.
+2. `MOCK_API_URL` configura la URL interna de Node (predeterminada `http://mock-api:4000/`); `MOCK_API_PORT`, `BACKEND_PORT` y `FRONTEND_PORT` controlan puertos publicados (4000, 5000 y 5173 por defecto).
+3. Levanta y comprueba los servicios:
 
 ```powershell
 docker compose up -d --build
 docker compose ps
-docker compose logs -f
 ```
 
-Cuando los servicios estén `healthy`, abre el chat y elige un usuario de prueba:
+URLs: [frontend/chat](http://localhost:5173), [salud backend](http://localhost:5000/api/health), [usuarios](http://localhost:5000/api/users), [salud mock API](http://localhost:4000/salud) y [programas](http://localhost:4000/programas).
 
-- Frontend/chat: <http://localhost:5173>
-- Salud del backend: <http://localhost:5000/api/health>
-- Usuarios de prueba: <http://localhost:5000/api/auth/users>
-- API mock: <http://localhost:4000/salud> y <http://localhost:4000/programas>
+## Uso directo de la API
 
-Para ejecutar el flujo E2E dentro de la red Docker, con el backend y frontend levantados:
+El perfil se envía en cada consulta. No se requiere token ni llamada de login. Ejemplo con PowerShell/curl:
 
 ```powershell
+curl.exe http://localhost:5000/api/users
+curl.exe -X POST http://localhost:5000/api/chat/messages `
+  -H "Content-Type: application/json" `
+  -d '{"userId":"EST-001","message":"¿Cuál es la nota mínima para aprobar?"}'
+```
+
+Para probar un coordinador, usa un ID listado por `GET /api/users`, por ejemplo `COORD-01`. La respuesta exitosa contiene `answer`, `sources` y `provider`. Usuarios desconocidos/entrada inválida se rechazan con 400; las consultas a expedientes fuera del alcance del rol se rechazan con 403. La pregunta se filtra contra inyecciones antes de llamar a Gemini.
+
+## Pruebas
+
+```powershell
+dotnet test backend/TutorFlow.sln
 docker compose --profile test run --build --rm docker-e2e
 ```
 
-El runner consulta `MOCK_API_URL` desde `.env`, valida salud de los tres servicios, descubrimiento de perfiles, tokens de sesión, anti-inyección, contexto, acceso estudiante/coordinador y respuestas/fuentes de Gemini. La suite local (sin consumo de cuota) se ejecuta con `dotnet test backend/TutorFlow.sln`. Para activar las pruebas .NET opt-in de Gemini y su E2E con la API mock propia de tests:
-
-```powershell
-$env:RUN_GEMINI_INTEGRATION_TESTS = "true"
-dotnet test backend/TutorFlow.sln
-Remove-Item Env:RUN_GEMINI_INTEGRATION_TESTS
-```
-
-Estas consultas reales pueden consumir cuota. Las pruebas locales cubren también errores controlados de cuota 429 y configuración de clave ausente.
-
-Para apagar los servicios: `docker compose down`. Para ver fallos: `docker compose logs backend frontend mock-api`.
-
-## URLs y puertos predeterminados
-
-| Servicio | URL en el host | Puerto interno Docker |
-|---|---|---:|
-| Frontend React/Vite | `http://localhost:5173` | 5173 |
-| Backend ASP.NET Core | `http://localhost:5000` | 8080 |
-| API mock Node | `http://localhost:4000` | 4000 |
-
-El perfil de prueba `docker-e2e` es temporal y no reemplaza los contenedores persistentes. Mantén `docker compose up -d` ejecutándose para validación humana.
+Las pruebas locales usan un adaptador falso y no consumen cuota. El runner Docker valida el selector/listado REST, flujo directo por estudiante/coordinador, entrada inválida, anti-inyección, límites entre programas y respuestas reales Gemini. Para las pruebas opt-in .NET con Gemini configura `RUN_GEMINI_INTEGRATION_TESTS=true`; pueden consumir cuota. Para apagar el entorno: `docker compose down`.
