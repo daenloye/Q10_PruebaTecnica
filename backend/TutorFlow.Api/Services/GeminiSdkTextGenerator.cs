@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Google.GenAI;
 using Google.GenAI.Types;
 
@@ -18,7 +19,7 @@ public sealed class GeminiSdkTextGenerator : IGeminiTextGenerator, IDisposable
                 apiKey: apiKey,
                 httpOptions: new HttpOptions
                 {
-                    RetryOptions = new HttpRetryOptions { Attempts = 1 }
+                    RetryOptions = CreateRetryOptions()
                 });
         }
     }
@@ -38,7 +39,7 @@ public sealed class GeminiSdkTextGenerator : IGeminiTextGenerator, IDisposable
             Temperature = 0.2,
             HttpOptions = new HttpOptions
             {
-                RetryOptions = new HttpRetryOptions { Attempts = 1 }
+                RetryOptions = CreateRetryOptions()
             }
         };
 
@@ -53,7 +54,9 @@ public sealed class GeminiSdkTextGenerator : IGeminiTextGenerator, IDisposable
         }
         catch (ApiException exception)
         {
-            _logger?.LogWarning("Gemini API returned HTTP {StatusCode}.", exception.StatusCode);
+            _logger?.LogWarning(
+                "Gemini API returned HTTP {StatusCode} for model {Model}. Provider detail: {ProviderDetail}",
+                exception.StatusCode, model, SafeProviderDetail(exception.Message));
             throw MapApiException(exception);
         }
         catch (HttpRequestException exception)
@@ -73,11 +76,33 @@ public sealed class GeminiSdkTextGenerator : IGeminiTextGenerator, IDisposable
     {
         429 => new GeminiAgentException(429, "gemini_quota_exceeded",
             "Se alcanzó la cuota disponible de Gemini. Espera un momento e inténtalo de nuevo.", exception),
+        401 or 403 => new GeminiAgentException(503, "gemini_credentials_rejected",
+            "Gemini rechazó las credenciales o el acceso del proyecto. Verifica la clave y su configuración.", exception),
+        404 => new GeminiAgentException(503, "gemini_model_unavailable",
+            "Gemini no reconoce el modelo configurado. Verifica GEMINI_MODEL y los modelos disponibles para la API key.", exception),
+        503 => new GeminiAgentException(503, "gemini_overloaded",
+            "Gemini está temporalmente saturado. La solicitud se reintentó; inténtalo de nuevo en unos minutos.", exception),
         >= 400 and < 500 => new GeminiAgentException(502, "gemini_request_rejected",
             "Gemini rechazó la solicitud. Revisa la clave, el modelo configurado y la cuota del proyecto.", exception),
         _ => new GeminiAgentException(502, "gemini_service_error",
             "El servicio de Gemini no está disponible en este momento. Intenta de nuevo más tarde.", exception)
     };
+
+    private static HttpRetryOptions CreateRetryOptions() => new()
+    {
+        Attempts = 3,
+        InitialDelay = 1,
+        MaxDelay = 4,
+        ExpBase = 2,
+        Jitter = 0.5
+    };
+
+    private static string SafeProviderDetail(string message)
+    {
+        var safe = Regex.Replace(message, @"AIza[0-9A-Za-z_-]{20,}", "[redacted-api-key]");
+        safe = Regex.Replace(safe, @"(?i)(x-goog-api-key|api[_-]?key)(\s*[:=]\s*)[^,\s;""}]+", "$1$2[redacted]");
+        return safe.Length <= 600 ? safe : safe[..600];
+    }
 
     public void Dispose() => _client?.Dispose();
 }

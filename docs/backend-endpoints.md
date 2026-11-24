@@ -88,7 +88,7 @@ Ejemplo:
 | `403` | Se menciona o intenta consultar información académica fuera del alcance del rol | Problem Details JSON con `title`, `status` (`403`) y `detail`; puede incluir `type`/`traceId`. |
 | `429` | `gemini_quota_exceeded` | `{ "error": "gemini_quota_exceeded", "message": "..." }`. |
 | `502` | Error de red, solicitud rechazada o servicio Gemini no disponible | `{ "error": "gemini_network_error\|gemini_request_rejected\|gemini_service_error", "message": "..." }`. |
-| `503` | `GEMINI_API_KEY` ausente | `{ "error": "gemini_not_configured", "message": "..." }`. |
+| `503` | `gemini_not_configured`, `gemini_credentials_rejected`, `gemini_model_unavailable` o `gemini_overloaded` | `{ "error": "código", "message": "..." }`. Los errores transitorios se reintentan hasta dos veces con backoff exponencial. |
 | `504` | `gemini_timeout` | `{ "error": "gemini_timeout", "message": "..." }`. |
 
 Estudiantes (`Student`) pueden consultar sus propios datos; coordinadores (`Coordinator`) solo pueden consultar estudiantes de sus programas asignados. No se acepta un rol en el request. Una consulta que intente acceder a un ID/nombre no autorizado se rechaza antes de llamar al agente.

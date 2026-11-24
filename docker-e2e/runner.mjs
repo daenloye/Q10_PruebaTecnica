@@ -32,15 +32,6 @@ async function chat(userId, message) {
   })
 }
 
-async function chatWithTransientRetries(userId, message) {
-  for (let attempt = 0; ; attempt++) {
-    const response = await chat(userId, message)
-    if (response.status !== 502 || attempt >= 2) return response
-    await response.body?.cancel()
-    await new Promise(resolve => setTimeout(resolve, 5000 * (attempt + 1)))
-  }
-}
-
 async function check(name, action) {
   await action()
   report.push(`PASS  ${name}`)
@@ -130,7 +121,7 @@ try {
     assert.equal(response.status, 400)
   })
 
-  const studentAnswer = await chatWithTransientRetries(student.id, '¿Cuál es la nota mínima para aprobar una asignatura y en qué escala se califica?')
+  const studentAnswer = await chat(student.id, '¿Cuál es la nota mínima para aprobar una asignatura y en qué escala se califica?')
   const studentChat = await json(studentAnswer)
   assert.equal(studentAnswer.status, 200, `Consulta de estudiante respondió ${studentAnswer.status}: ${JSON.stringify(studentChat)}`)
   assert.ok(studentChat.answer?.trim(), 'Gemini debe devolver una respuesta no vacía')

@@ -95,6 +95,24 @@ public sealed class ChatPipelineTests
     }
 
     [Fact]
+    public async Task GeminiOverloadReturnsActionable503()
+    {
+        using var factory = new TestApiFactory(new GeminiAgentException(
+            503, "gemini_overloaded", "Gemini está temporalmente saturado."));
+        using var client = factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/chat/messages", new
+        {
+            userId = "EST-001",
+            message = "¿Cuál es mi promedio?"
+        });
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal("gemini_overloaded", body.RootElement.GetProperty("error").GetString());
+        Assert.Contains("saturado", body.RootElement.GetProperty("message").GetString());
+    }
+
+    [Fact]
     public async Task DirectEndpointRejectsUnknownUserBeforeAgentDispatch()
     {
         using var factory = new TestApiFactory();

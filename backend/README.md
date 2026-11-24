@@ -7,9 +7,15 @@ API REST ASP.NET Core .NET 8. Recibe la identidad de prueba seleccionada, resuel
 - .NET SDK 8 o superior (la configuración Docker usa SDK `10.0.404`).
 - Copia `.env.example` a `.env` en la raíz y configura `GEMINI_API_KEY`; `GEMINI_MODEL` es opcional (`gemini-3.5-flash-lite` por defecto). `.env` y variantes están ignorados por Git.
 - El SDK oficial `Google.GenAI` envía reglas, identidad/rol resuelto, contexto permitido y la pregunta validada. No se registra la clave.
-- Sin clave, el chat responde 503; cuota 429, red/servicio 502 y timeout 504 son respuestas controladas.
+- Sin clave o con el proyecto/modelo inaccesible, el chat responde 503; cuota 429, red/servicio 502 y timeout 504 son respuestas controladas. HTTP 503 de alta demanda se reintenta hasta dos veces con backoff exponencial y se registra con estado, modelo y detalle del proveedor (sin exponer la API key).
 - La mock API Node es opcional para datos personalizados. Desde `initial_docs/mock-api/`, inicia `node server.js` (puerto 4000).
 - Inicia localmente con `dotnet run --urls http://localhost:5000` desde `backend/TutorFlow.Api/`.
+
+## Diagnóstico de disponibilidad Gemini
+
+En la validación Docker del 24 de noviembre de 2026, el contenedor tenía `GEMINI_API_KEY` presente y `GEMINI_MODEL=gemini-3.8-flash`. Gemini respondió HTTP 503 con el detalle `This model is currently experiencing high demand`; no fue un 429 de cuota ni un fallo de red/TLS. `gemini-3.8-flash` sigue siendo un nombre válido, pero estaba temporalmente saturado. Para esta ejecución se cambió el `.env` local a `gemini-3.5-flash-lite`, modelo estable que respondió HTTP 200 en la prueba real. La plantilla `.env.example` ya usa ese modelo como valor predeterminado.
+
+El SDK estaba configurado con `Attempts=1`, que desactiva los reintentos. Ahora usa hasta tres intentos con backoff exponencial y jitter para errores transitorios. Los logs incluyen código HTTP, modelo y detalle del proveedor con patrones de API key redactados. Consulta la [lista oficial de modelos](https://ai.google.dev/gemini-api/docs/models) y la [guía oficial de reintentos](https://ai.google.dev/gemini-api/docs/troubleshooting) si cambias el modelo.
 
 ## Contrato REST
 
