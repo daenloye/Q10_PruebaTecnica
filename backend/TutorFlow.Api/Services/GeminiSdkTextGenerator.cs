@@ -36,7 +36,8 @@ public sealed class GeminiSdkTextGenerator : IGeminiTextGenerator, IDisposable
             {
                 Parts = [new Part { Text = systemInstruction }]
             },
-            Temperature = 0.2,
+            Temperature = 0.1,
+            MaxOutputTokens = 768,
             HttpOptions = new HttpOptions
             {
                 RetryOptions = CreateRetryOptions()

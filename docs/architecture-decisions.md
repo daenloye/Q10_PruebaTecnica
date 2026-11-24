@@ -31,3 +31,7 @@ También se configurarían rate limits por usuario e IP, CORS estricto por orige
 ## Integración Gemini
 
 `GeminiAgentClient` combina la instrucción de reglas, el contexto autorizado y el perfil ya resuelto en servidor. `GEMINI_API_KEY` y `GEMINI_MODEL` vienen del entorno o `.env`; el modelo se puede cambiar sin modificar el código. Las respuestas de cuota, configuración, red y servicio se traducen a errores controlados.
+
+### Estilo de respuesta
+
+Gemini responde en español, con el dato o conclusión al inicio y normalmente en 1–3 frases o viñetas breves. Omite saludos, repeticiones y cierres; añade desgloses solo cuando se solicitan o aclaran el resultado. La configuración usa temperatura `0.1` y un máximo de `768` tokens de salida para favorecer respuestas objetivas sin cortar listados razonables. Esta preferencia no reduce la obligación de responder todos los puntos solicitados, usar valores calculados por TutorFlow, seguir `rules.md`/`api.md`, no inventar información ni exceder el contexto permitido por el rol. La validación de permisos se realiza en el backend antes de invocar a Gemini.
