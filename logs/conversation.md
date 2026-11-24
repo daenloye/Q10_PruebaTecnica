@@ -149,3 +149,17 @@
 **Hallazgos/acciones:** SHA-256 de `frontend/src/App.tsx` y `/app/src/App.tsx` coinciden (`266ab1cbbf1385b38a47e58c2fd76027bdf55047a20fe0ff00b3736722575ade`); el favicon local coincide con `/app/public/favicon.ico`. `docker inspect` reporta `Mounts: []`. Se ejecutó `docker compose build --no-cache frontend` y se recreó el servicio. El repositorio no contiene workflows/pipelines CI/CD configurados.
 
 **Verificación:** `npm run build` TypeScript/Vite pasó dentro del contenedor. El módulo servido sin caché no contiene `useEffect(async...)`, `useEffect(() => async...)` ni `async () =>`; sí contiene la función async interna `loadUsers`. `/`, `/src/App.tsx` y `/favicon.ico?cachebust=...` devolvieron 200; favicon `image/x-icon`, 4286 bytes. Mock API, backend y frontend permanecen `healthy`. `.env` sigue ignorado y sin rastrear.
+
+### Nueva captura de consola React
+
+**Usuario:** Adjuntó otra captura con el warning `useEffect must not return anything besides a function` y `TypeError: destroy is not a function`, referidos a `App.tsx`.
+
+**Comprobación actual:** El origen `http://localhost:5173/src/App.tsx` responde 200 y el módulo transformado contiene tres efectos síncronos; el primero invoca una función interna `async loadUsers()` y retorna una limpieza síncrona. No aparecen patrones `useEffect(async ...)` ni callbacks de efecto async en `frontend/src`. `/favicon.ico` responde 200 (`image/x-icon`, 4286 bytes). La versión del mensaje de consola adjunto no coincide con el módulo que entrega actualmente el servidor.
+
+**Límites del entorno:** En esta ejecución el cliente Docker no puede abrir `docker_engine` (permiso denegado), así que no fue posible consultar/recrear contenedores. El build local con npm tampoco pudo iniciar porque Node recibió `EPERM` al resolver `C:\Users\Daniel`. No existen `.github`, `.gitlab-ci.yml` ni `azure-pipelines.yml` en el repositorio. `.env` está ignorado y no está rastreado.
+
+### Diagnóstico de archivos y permisos del host
+
+**Usuario:** Solicitó comprobar qué cambios existen realmente en disco y preparar comandos exactos para ejecutar Docker y el commit desde PowerShell/WSL con permisos completos, sin insistir en operaciones bloqueadas.
+
+**Verificado:** `frontend/src/App.tsx` existe y sus tres `useEffect` son síncronos; el primero invoca `async function loadUsers()` y retorna cleanup síncrono con `controller.abort()`. `frontend/public/favicon.ico` existe (4286 bytes; encabezado ICO válido). Los fixes frontend aparecen en el historial Git bajo `a4df052` y commits anteriores. `git status --short` muestra únicamente `M logs/conversation.md`; `.git/index.lock` no existe. `.env` está ignorado por `.gitignore` y no figura en el índice. Docker, npm y commit no se reintentaron en esta revisión.
